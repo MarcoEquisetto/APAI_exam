@@ -1,0 +1,55 @@
+================================================================================
+PROJECT: Beyond Single Prompts: Comparing Vision Adapters, CoOp, and PLOT for Domain-Specific Image Classification
+================================================================================
+
+1. PROJECT OBJECTIVES
+--------------------------------------------------------------------------------
+* Engineering Goal: Successfully implement and integrate three distinct Parameter-Efficient Fine-Tuning (PEFT) paradigms (Context Optimization, PLOT, and CLIP-Adapter) on top of a frozen CLIP architecture using PyTorch.
+* Empirical Goal: Quantify the performance versus parameter-efficiency trade-off across strict few-shot settings (K = 1, 2, 4, 8, 16) compared to Zero-Shot and Linear Probe baselines.
+* Analytical Goal: Determine which adaptation modality (Global Text vs. Local Text vs. Visual Space) provides better generalization and robustness when applied to specialized, out-of-distribution domains.
+
+2. MODELS & ARCHITECTURE
+--------------------------------------------------------------------------------
+* Base Foundation Model: OpenAI CLIP (Recommendation: ViT-B/16 or ViT-B/32 for compatibility with Google Colab T4 GPUs). The base model weights are strictly frozen (requires_grad = False).
+* Text Space Adapter 1 (CoOp): Replaces manual discrete text prompts with continuous, learnable global context vectors.
+* Text Space Adapter 2 (PLOT): Learns multiple (N) context vectors per class and aligns them with local visual patch features using the Sinkhorn-Knopp algorithm for Optimal Transport.
+* Vision Space Adapter (CLIP-Adapter): A residual Multi-Layer Perceptron (MLP) bottleneck network appended to the frozen visual encoder, using alpha-blending to mix new features with original features.
+
+3. DATASETS (Domain Shift Targets)
+--------------------------------------------------------------------------------
+Select 1-2 of the following datasets to test CLIP outside its everyday-object comfort zone:
+* Scientific/Specialized: EuroSAT (Satellite imagery) or PatchCamelyon (PCam - Medical histopathology).
+* Fine-Grained Classification: Oxford Flowers 102, Stanford Cars, or FGVC Aircraft.
+* Texture Recognition: Describable Textures Dataset (DTD) (Highly recommended for testing PLOT's local patch alignment).
+
+4. RESEARCHER TASK DIVISION (WORKLOAD SPLIT)
+--------------------------------------------------------------------------------
+
+[ Researcher 1 (R1): The Core Infrastructure & Baselines ]
+* Environment setup: Manage requirements.txt, GitHub repo, and Weights & Biases (WandB) for centralized tracking.
+* Data Pipeline: Write a reproducible PyTorch Dataset that randomly samples exactly K images per class (1, 2, 4, 8, 16) using fixed random seeds.
+* Base Extraction: Modify the CLIP extraction pipeline to return both the global [CLS] token (for CoOp/Adapters) and the unpooled dense local patch embeddings (required for PLOT).
+* Baselines: Implement Zero-Shot inference (manual prompts + cosine similarity) and train the Linear Probe (scikit-learn Logistic Regression on frozen 512-D visual vectors).
+* Report Ownership: Introduction, Related Work (Zero-Shot models), Dataset Analysis, and Baseline Results.
+
+[ Researcher 2 (R2): Text Space Adaptation (CoOp & PLOT) ]
+* CoOp Implementation: Subclass the CLIP text encoder to accept continuous, learnable vectors optimized via gradient descent.
+* PLOT Implementation: Upgrade the text encoder to initialize N prompts per class. Implement the Sinkhorn algorithm to compute the optimal matching distance between text prompts and R1's dense visual patches.
+* Training Loop: Build the 2-stage PyTorch training loop (Inner loop: Sinkhorn distance without gradients; Outer loop: Backpropagation to update text prompts).
+* Experimentation: Ablation studies on prompt length (CoOp) and number of prompts 'N' (PLOT).
+* Report Ownership: Text Adaptation Methodology (CoOp and PLOT) and corresponding ablation results.
+
+[ Researcher 3 (R3): Vision Space Adaptation (CLIP-Adapter) ]
+* Adapter Implementation: Build the residual MLP bottleneck layer and integrate it seamlessly after CLIP's frozen visual encoder.
+* Alpha Blending Implementation: Build the residual connection logic (controlled by hyperparameter alpha) to mix frozen CLIP features with learned adapter features.
+* Training Loop: Build the standard backpropagation loop for the MLP bottleneck while keeping CLIP frozen.
+* Experimentation: Ablation studies on the bottleneck dimensionality (compression ratio) to map parameter count vs. accuracy.
+* Report Ownership: Vision Adaptation Methodology, Final Comparative Analysis (Global Text vs. Local Text vs. Vision), and Conclusion.
+
+5. GENERAL IMPLEMENTATION INSTRUCTIONS
+--------------------------------------------------------------------------------
+* Phase 1 (Week 1): R1 establishes the repository, WandB, and few-shot dataloaders. R2 and R3 study the CLIP architecture and prepare their PyTorch subclasses.
+* Phase 2 (Week 2): R1 finalizes baselines. R2 implements CoOp. R3 implements CLIP-Adapter. Verify everything trains without Out-Of-Memory (OOM) errors.
+* Phase 3 (Week 3): R2 builds and integrates the Optimal Transport (PLOT) logic. R3 runs hyperparameter tuning for the vision adapter.
+* Phase 4 (Week 4): Final dataset runs (K=1 through 16) across all methods. Generate WandB charts.
+* Phase 5 (Week 5): Draft final report and compile the presentation.
