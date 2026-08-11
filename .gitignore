@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Environments
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+
+# Weights & Biases
+wandb/
+
+# Project-specific data and generated plots
+data/eurosat/
+

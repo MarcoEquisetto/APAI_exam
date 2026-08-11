@@ -12,6 +12,11 @@ dependencies:
   - numpy
   - matplotlib
   - tqdm
+  - scikit-learn
   - pip
   - pip:
     - transformers
+    - open_clip_torch>=2.20.0
+    - POT>=0.9.0
+    - wandb>=0.15.0
+    - certifi
