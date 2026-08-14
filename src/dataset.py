@@ -14,10 +14,23 @@ EuroSAT contains 27,000 geo-referenced Sentinel-2 satellite images across
 10 land-use / land-cover classes (e.g., "Forest", "Highway", "River", etc.).
 """
 
+import sys
+import os
+from pathlib import Path
+
+# Add project root and src directory to sys.path
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parent
+if str(FILE_DIR) not in sys.path:
+    sys.path.insert(0, str(FILE_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 from typing import Tuple, Optional, List
+
 
 
 # ============================================================================
@@ -99,6 +112,10 @@ class EuroSATDataset(Dataset):
                     std=(0.26862954, 0.26130258, 0.27577711),
                 ),
             ])
+
+        # Resolve data path dynamically if default relative path doesn't exist in CWD
+        if root == "./data" and not os.path.exists("./data") and (PROJECT_ROOT / "data").exists():
+            root = str(PROJECT_ROOT / "data")
 
         # ----------------------------------------------------------------
         # Load EuroSAT via torchvision.

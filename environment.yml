@@ -1,4 +1,4 @@
-name: APAI-exam
+name: APAI
 channels:
   - pytorch
   - nvidia

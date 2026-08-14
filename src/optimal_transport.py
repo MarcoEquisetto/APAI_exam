@@ -32,14 +32,31 @@ classical Wasserstein / Earth Mover's Distance) because:
   Optimal Transport." NeurIPS.
 """
 
+import sys
+import os
+from pathlib import Path
+
+# Add project root and src directory to sys.path
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parent
+if str(FILE_DIR) not in sys.path:
+    sys.path.insert(0, str(FILE_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import torch
 import torch.nn as nn
 import numpy as np
 import ot  # POT: Python Optimal Transport
 from typing import List, Tuple, Optional
 
-from base_model import BaseCLIPWrapper
-from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+try:
+    from src.base_model import BaseCLIPWrapper
+    from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+except ModuleNotFoundError:
+    from base_model import BaseCLIPWrapper
+    from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+
 
 
 class OptimalTransportCLIP:

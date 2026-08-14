@@ -1,0 +1,133 @@
+Mattia 
+Infrastructure & Data:
+	Set up the GitHub repository and Python environment (PyTorch, Transformers, torchvision).
+	Implement modular PyTorch Dataset and DataLoader scripts for the chosen datasets.
+	Set up logging system (Weights & Biases or TensorBoard) to track training curves, GPU memory usage, and accuracy. This is crucial for evaluating "resource investment."
+
+Baselines:
+	Implement the vanilla Zero-Shot CLIP evaluation pipeline.
+	Implement a Linear Probe baseline (freezing CLIP, training a linear classifier on top of image features).
+
+Optimal Transport (OT):
+	Research and implement an OT-based alignment for inference (e.g., using the POT - Python Optimal Transport library).
+	Compare standard cosine similarity inference against OT-based text-image matching.
+
+Lead Duties:
+	Define the abstract base classes or interfaces for the models so Carlo and Marco's code integrates seamlessly.
+	Aggregate the final metrics and plot the comparative graphs (Accuracy vs. Trainable Parameters, Memory Usage vs. Epochs).
+
+
+Guide for Mattia: Infrastructure, Baselines, & Optimal Transport
+As the Project Lead, your primary technical role is to build the "backbone" of the repository. Your code will load the models, feed the data, evaluate the results, and provide the Optimal Transport (OT) alignment.
+
+1. The Core Infrastructure (The Interfaces)
+You need to establish how data flows. Both Marco and Carlo will build wrappers around parts of CLIP. You must define the base Trainer or Evaluator class that they will inherit from or plug into.
+What you need to build:
+The Dataset Pipeline: Create PyTorch Dataset and DataLoader classes for your chosen datasets (e.g., EuroSAT, DTD).Interface out: These loaders must yield (images, labels, text_descriptions).
+The Base CLIP Wrapper: Load the frozen OpenAI CLIP model (e.g., ViT-B/32 or ViT-L/14 via the open_clip library).
+The Evaluation Loop: A standard loop that takes an image representation and text representations, computes similarities, and calculates Top-1 and Top-5 accuracy.
+
+2. Baselines & Optimal Transport
+While Marco and Carlo handle learning-based adaptations, you will handle the training-free baselines.
+What you need to build:
+Zero-Shot Baseline: Implement the standard inference: image_features @ text_features.T.
+Optimal Transport (OT) Baseline: 
+	Instead of simple cosine similarity, frame the image-text matching as an OT problem. 
+		Use the POT (Python Optimal Transport) library (pip install POT).
+		You will compute the Sinkhorn distance between the distribution of image patch tokens (from the vision encoder) and text tokens (from the text encoder).
+		Note for Mattia: This requires extracting the intermediate token embeddings from CLIP, not just the final pooled vector.
+
+3. Integration Points (Crucial)
+You must define the exact function signatures that Carlo and Marco will use.
+For Carlo (Text): Define a get_text_features(self, class_names) method in your base class. Carlo will override this to inject his learnable prompts.
+For Marco (Vision): Define a get_image_features(self, images) method. Marco will override this to pass the images through his adapter.
+
+
+
+
+
+Carlo 
+Theory & Setup:
+	Understand the Context Optimization (CoOp) architecture: replacing hard-coded prompts (e.g., "a photo of a [CLASS]") with learnable continuous vectors.
+
+Implementation:
+	Wrap the CLIP text encoder in a custom nn.Module that injects trainable embeddings (e.g., $M$ context tokens).
+	Ensure the gradients only flow into your context tokens, keeping the rest of the CLIP model strictly frozen.
+
+Experiments:
+	Test different prompt lengths (e.g., 4, 8, 16 tokens).
+	Implement both Unified Context (same prompt for all classes) and Class-Specific Context (different prompts for each class) to see which generalizes better.
+	Tune the learning rate specifically for the text embeddings (they often require different optimization schedules than network weights).
+
+
+
+
+Guide for Carlo: Text Modality (CoOp)
+Your task is to implement Context Optimization (CoOp). This means you will leave the vision side completely alone (relying on Mattia's base CLIP model) and focus entirely on creating learnable prompt embeddings.
+
+1. The CoOp Implementation
+In standard CLIP, the text prompt is hardcoded (e.g., "a photo of a dog"). CoOp replaces "a photo of a" with learnable vectors.
+What you need to build:
+Learnable Context Vectors: Create a PyTorch nn.Parameter of shape (N, D), where $N$ is the number of context tokens (e.g., 4, 8, 16) and $D$ is the embedding dimension of the CLIP text encoder (e.g., 512 for ViT-B/32).
+The Custom Text Encoder: You cannot just pass strings into CLIP anymore. You must intercept the tokenization process.
+	Tokenize the class name (e.g., "dog").
+	Get the embedding for the "dog" token.
+	Concatenate your learnable context vectors with the "dog" embedding.
+	Pass this concatenated tensor through the rest of the CLIP text transformer.
+
+2. Optimization
+Since you are only training a tiny number of parameters (the context vectors), standard training loops often overfit or fail to learn properly.
+	Optimizer: You will likely need a different learning rate than standard network fine-tuning (often higher, e.g., using SGD with a specific schedule).
+	Freezing: You must ensure that requires_grad=False for all parameters in the CLIP text transformer; only your context vectors should have requires_grad=True.
+
+3. Interfacing with Mattia's Code
+	You will take Mattia's base model class and create a subclass (e.g., CoOpModel(BaseCLIPModel)).
+	You will override Mattia's get_text_features(self, class_names) method.
+	Your overridden method will generate the adapted text features using your trained context vectors and return them in the exact shape Mattia's evaluation loop expects 	(usually [num_classes, embedding_dim]).
+
+
+
+
+
+Marco 
+Theory & Setup:
+	Understand the CLIP-Adapter architecture: adding a small bottleneck Multi-Layer Perceptron (MLP) after the visual encoder and blending its output with the original features.  
+
+Implementation:
+	Build the adapter module: a linear layer down-projecting the vision features, a non-linear activation (e.g., ReLU), and a linear layer up-projecting back to the original 	dimension.
+	Implement the residual connection formula: $f_{new} = \alpha \cdot Adapter(f_{orig}) + (1 - \alpha) \cdot f_{orig}$.
+	Ensure only the adapter weights are trainable.Experiments:Experiment with the bottleneck reduction ratio (how small the hidden layer is).Optimize the residual blending ratio ($\alpha$).
+
+(Optional Extension) Try a Training-Free Tip-Adapter approach using a key-value cache if time permits.  
+
+
+
+Guide for Marco: Vision Modality (CLIP-Adapter)
+Your task is to implement the CLIP-Adapter. You will leave the text side completely alone (using standard hardcoded prompts) and focus entirely on adding a lightweight adapter to the vision features.
+
+1. The CLIP-Adapter Implementation
+CLIP-Adapter does not change the internal transformer layers. It adds a small bottleneck MLP after the vision encoder and blends the new features with the original features via a residual connection.
+What you need to build:
+	The MLP Bottleneck: Create an nn.Module containing:A linear layer down-projecting the input dimension (e.g., 512) to a smaller dimension (e.g., 128).
+	A non-linear activation (e.g., ReLU).
+	A linear layer up-projecting back to the original dimension (e.g., 512).
+	The Residual Blending: The final image feature $f_{final}$ is computed as:$f_{final} = \alpha \cdot \text{MLP}(f_{orig}) + (1 - \alpha) \cdot f_{orig}$where $\alpha$ is a 	blending hyperparameter (often around 0.2) and $f_{orig}$ is the original output from the frozen CLIP vision encoder.
+
+2. Optimization
+Like Carlo, you are training very few parameters compared to the full model.
+	Initialization: The adapter layers must be initialized carefully so they don't destroy the pre-trained features early in training (e.g., initializing the final linear layer 	near zero).
+	Freezing: You must ensure that the entire CLIP vision encoder remains frozen (requires_grad=False). Only your MLP layers should update.
+
+3. Interfacing with Mattia's Code
+You will take Mattia's base model class and create a subclass (e.g., VisionAdapterModel(BaseCLIPModel)).
+You will override Mattia's get_image_features(self, images) method.
+Your overridden method will:
+	Pass the images through the frozen vision encoder.
+	Pass those features through your MLP and apply the residual blending.
+	Return the adapted features in the shape Mattia expects (usually [batch_size, embedding_dim]).
+
+
+
+
+
+

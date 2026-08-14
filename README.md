@@ -17,23 +17,26 @@ Evaluate the **performance vs. trainable parameters** trade-off across different
 ## Repository Structure
 
 ```
-├── base_model.py          # BaseCLIPWrapper — base interface (get_image_features, get_text_features)
-├── baselines.py           # ZeroShotCLIP, LinearProbeCLIP
-├── optimal_transport.py   # OptimalTransportCLIP (Sinkhorn on patch/text tokens)
-├── dataset.py             # EuroSATDataset, get_dataloaders → (images, labels, text)
-├── engine.py              # evaluate(), train(), plot_comparative_results()
-├── environment.yml        # Conda environment
-├── requirements.txt       # pip dependencies
-├── data/                  # EuroSAT (auto-download)
-└── plots/                 # Generated comparative plots
+├── src/
+│   ├── base_model.py          # BaseCLIPWrapper — base interface (get_image_features, get_text_features)
+│   ├── baselines.py           # ZeroShotCLIP, LinearProbeCLIP
+│   ├── clip_adapter.py        # Vision CLIP-Adapter (Marco)
+│   ├── clip_adapter_experiments.py # Hyperparameter exploration script
+│   ├── dataset.py             # EuroSATDataset, get_dataloaders → (images, labels, text)
+│   ├── engine.py              # evaluate(), train(), plot_comparative_results()
+│   └── optimal_transport.py   # OptimalTransportCLIP (Sinkhorn on patch/text tokens)
+├── environment.yaml           # Conda environment
+├── data/                      # EuroSAT (auto-download)
+├── docs/                      # Progress checkpoints & bibliography
+└── plots/                     # Generated comparative plots
 ```
 
 ## Setup
 
 ```bash
 # Option 1: Conda
-conda env create -f environment.yml
-conda activate APAI-exam
+conda env create -f environment.yaml
+conda activate APAI
 
 # Option 2: pip
 pip install -r requirements.txt
@@ -44,17 +47,24 @@ pip install -r requirements.txt
 ### Run baselines (Mattia)
 
 ```bash
-python engine.py
+python src/engine.py
 ```
 
 Runs Zero-Shot, Linear Probe and Optimal Transport on EuroSAT, then saves comparative plots to `plots/`.
 
+### Run Marco's CLIP-Adapter Experiments
+
+```bash
+python src/clip_adapter_experiments.py --epochs 5
+```
+
 ### Integrate an adapter (Carlo / Marco)
 
 ```python
-from base_model import BaseCLIPWrapper
-from engine import train, evaluate
-from dataset import get_dataloaders
+from src.base_model import BaseCLIPWrapper
+from src.engine import train, evaluate
+from src.dataset import get_dataloaders
+```
 
 class MyAdapter(BaseCLIPWrapper):
     def __init__(self, **kwargs):

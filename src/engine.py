@@ -22,9 +22,21 @@ project share:
     for final metrics.
 """
 
+import sys
+import os
+from pathlib import Path
+
+# Add project root and src directory to sys.path
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parent
+if str(FILE_DIR) not in sys.path:
+    sys.path.insert(0, str(FILE_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import ssl
 import certifi
-import os
+
 
 # Fix SSL certificate error on Windows: the Windows Certificate Store
 # contains a malformed certificate that crashes OpenSSL. We monkey-patch
@@ -354,7 +366,10 @@ def train(
         - ``"best_val_top1"``: best validation Top-1 accuracy
         - ``"peak_gpu_mb"``:   peak GPU memory during training
     """
-    from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+    try:
+        from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+    except ModuleNotFoundError:
+        from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
 
     if class_names is None:
         class_names = EUROSAT_CLASS_NAMES
@@ -645,10 +660,16 @@ def run_all_evaluations(
     all_results : Dict[str, Dict[str, Any]]
         Mapping from model name to its metrics dictionary.
     """
-    from base_model import BaseCLIPWrapper
-    from baselines import ZeroShotCLIP, LinearProbeCLIP
-    from optimal_transport import OptimalTransportCLIP
-    from dataset import get_dataloaders
+    try:
+        from src.base_model import BaseCLIPWrapper
+        from src.baselines import ZeroShotCLIP, LinearProbeCLIP
+        from src.optimal_transport import OptimalTransportCLIP
+        from src.dataset import get_dataloaders
+    except ModuleNotFoundError:
+        from base_model import BaseCLIPWrapper
+        from baselines import ZeroShotCLIP, LinearProbeCLIP
+        from optimal_transport import OptimalTransportCLIP
+        from dataset import get_dataloaders
 
     # Shared frozen CLIP backbone.
     clip_wrapper = BaseCLIPWrapper(device=device)
@@ -700,6 +721,9 @@ def plot_comparative_results(
       3. **Combined Summary** — a single figure with all three panels
          for easy inclusion in reports/presentations.
     """
+    if save_dir == "./plots" and not os.path.exists("./plots"):
+        save_dir = str(PROJECT_ROOT / "plots")
+
     os.makedirs(save_dir, exist_ok=True)
 
     model_names = list(all_results.keys())
@@ -895,7 +919,10 @@ def plot_comparative_results(
 # Entry point: run this file directly to evaluate all baselines
 # ============================================================================
 if __name__ == "__main__":
-    from dataset import get_dataloaders
+    try:
+        from src.dataset import get_dataloaders
+    except ModuleNotFoundError:
+        from dataset import get_dataloaders
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
