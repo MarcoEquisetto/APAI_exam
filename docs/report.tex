@@ -1,0 +1,47 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\title{Comparing Parameter-Efficient Adaptation Strategies on Frozen CLIP for EuroSAT}
+\author{Marco Equisetto (Vision Modality Lead) \and Mattia \and Carlo}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Vision Modality Adaptation (Marco)}
+
+\subsection{CLIP-Adapter Architecture}
+The core of the vision adaptation strategy relies on the CLIP-Adapter architecture (Gao et al., IJCV 2024). A lightweight bottleneck MLP is inserted after the frozen visual encoder of CLIP. The residual blending formula is defined as:
+\begin{equation}
+f_{\text{new}} = \alpha \cdot \text{MLP}(f_{\text{orig}}) + (1 - \alpha) \cdot f_{\text{orig}}
+\end{equation}
+where $f_{\text{orig}}$ represents the L2-normalized image features extracted from the frozen CLIP backbone, and $\alpha$ is the residual blending ratio.
+
+This method achieves high parameter efficiency, requiring approximately 65K to 130K trainable parameters (depending on the bottleneck reduction ratio) compared to the 86M parameters of the complete CLIP model.
+
+\subsection{Hyperparameter Sweeps}
+To find the optimal configuration for the vision adapter, we performed sweeps over the bottleneck reduction ratio ($r$) and the residual blending ratio ($\alpha$).
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../plots/clip_adapter_reduction_sweep.png}
+    \caption{Impact of the bottleneck reduction ratio ($r$) on Top-1 Accuracy and Trainable Parameters.}
+    \label{fig:reduction_sweep}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../plots/clip_adapter_alpha_sweep.png}
+    \caption{Impact of the residual blending ratio ($\alpha$) on Top-1 Accuracy.}
+    \label{fig:alpha_sweep}
+\end{figure}
+
+\subsection{Tip-Adapter (Optional Extension)}
+In addition to the standard CLIP-Adapter, we implemented the training-free Tip-Adapter method. This approach constructs a key-value cache from a few-shot support set (image features as keys, one-hot labels as values) and blends its activation with the zero-shot text prototype predictions. This allows for rapid adaptation without any gradient updates.
+
+\subsection{Cross-Modal Integration}
+\textit{Note: The cross-modal integration testing (combining the vision adapter with the CoOp text prompt adapter) was blocked during this phase pending the completion of the text modality component.}
+
+\end{document}

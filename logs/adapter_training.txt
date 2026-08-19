@@ -1,0 +1,148 @@
+(APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src$ python clip_adapter_experiments.py --epochs 10 --batch_size 64 --lr 1e-3 --no_wandb
+Device: cuda
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 2, Alpha = 0.2
+==================================================================
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[CLIPAdapter_R2_a0.2] Training 262,912 params | 10 epochs | LR=0.001 | adamw
+/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+  Epoch 1/10 | Loss: 1.2146 | Acc: 56.06% | Val Top-1: 64.09%
+  Epoch 2/10 | Loss: 0.2123 | Acc: 93.07% | Val Top-1: 94.61%
+  Epoch 3/10 | Loss: 0.1242 | Acc: 95.81% | Val Top-1: 95.85%
+  Epoch 4/10 | Loss: 0.1007 | Acc: 96.52% | Val Top-1: 96.41%
+  Epoch 5/10 | Loss: 0.0821 | Acc: 97.01% | Val Top-1: 96.70%
+  Epoch 6/10 | Loss: 0.0684 | Acc: 97.67% | Val Top-1: 96.15%
+  Epoch 7/10 | Loss: 0.0549 | Acc: 98.12% | Val Top-1: 97.00%
+  Epoch 8/10 | Loss: 0.0462 | Acc: 98.45% | Val Top-1: 97.11%
+  Epoch 9/10 | Loss: 0.0392 | Acc: 98.72% | Val Top-1: 97.24%
+  Epoch 10/10 | Loss: 0.0355 | Acc: 98.86% | Val Top-1: 97.28%
+[CLIPAdapter_R2_a0.2] Done in 1873.3s | Final Loss: 0.0355 | Best Val: 97.28%
+[CLIPAdapter_R2_a0.2] Top-1: 97.28% | Top-5: 100.00% | Params: 262,912 | 32.5s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 4, Alpha = 0.2
+==================================================================
+[CLIPAdapter_R4_a0.2] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3042 | Acc: 52.04% | Val Top-1: 58.98%
+  Epoch 2/10 | Loss: 0.2277 | Acc: 92.48% | Val Top-1: 94.83%
+  Epoch 3/10 | Loss: 0.1266 | Acc: 95.88% | Val Top-1: 95.89%
+  Epoch 4/10 | Loss: 0.1051 | Acc: 96.47% | Val Top-1: 96.02%
+  Epoch 5/10 | Loss: 0.0879 | Acc: 97.07% | Val Top-1: 96.22%
+  Epoch 6/10 | Loss: 0.0771 | Acc: 97.38% | Val Top-1: 96.65%
+  Epoch 7/10 | Loss: 0.0658 | Acc: 97.78% | Val Top-1: 96.87%
+  Epoch 8/10 | Loss: 0.0562 | Acc: 98.04% | Val Top-1: 96.76%
+  Epoch 9/10 | Loss: 0.0497 | Acc: 98.39% | Val Top-1: 97.04%
+  Epoch 10/10 | Loss: 0.0464 | Acc: 98.48% | Val Top-1: 97.11%
+[CLIPAdapter_R4_a0.2] Done in 1696.4s | Final Loss: 0.0464 | Best Val: 97.11%
+[CLIPAdapter_R4_a0.2] Top-1: 97.11% | Top-5: 100.00% | Params: 131,712 | 31.9s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 8, Alpha = 0.2
+==================================================================
+[CLIPAdapter_R8_a0.2] Training 66,112 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3840 | Acc: 48.72% | Val Top-1: 52.07%
+  Epoch 2/10 | Loss: 0.2512 | Acc: 91.81% | Val Top-1: 94.28%
+  Epoch 3/10 | Loss: 0.1325 | Acc: 95.48% | Val Top-1: 95.72%
+  Epoch 4/10 | Loss: 0.1082 | Acc: 96.49% | Val Top-1: 95.67%
+  Epoch 5/10 | Loss: 0.0959 | Acc: 96.75% | Val Top-1: 96.35%
+  Epoch 6/10 | Loss: 0.0799 | Acc: 97.33% | Val Top-1: 96.50%
+  Epoch 7/10 | Loss: 0.0720 | Acc: 97.62% | Val Top-1: 96.69%
+  Epoch 8/10 | Loss: 0.0643 | Acc: 97.85% | Val Top-1: 96.93%
+  Epoch 9/10 | Loss: 0.0587 | Acc: 98.13% | Val Top-1: 96.81%
+  Epoch 10/10 | Loss: 0.0559 | Acc: 98.22% | Val Top-1: 96.81%
+[CLIPAdapter_R8_a0.2] Done in 1716.2s | Final Loss: 0.0559 | Best Val: 96.93%
+[CLIPAdapter_R8_a0.2] Top-1: 96.81% | Top-5: 100.00% | Params: 66,112 | 33.8s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 16, Alpha = 0.2
+==================================================================
+[CLIPAdapter_R16_a0.2] Training 33,312 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.4232 | Acc: 48.10% | Val Top-1: 50.59%
+  Epoch 2/10 | Loss: 0.3000 | Acc: 89.87% | Val Top-1: 94.44%
+  Epoch 3/10 | Loss: 0.1481 | Acc: 95.10% | Val Top-1: 95.22%
+  Epoch 4/10 | Loss: 0.1209 | Acc: 95.97% | Val Top-1: 95.72%
+  Epoch 5/10 | Loss: 0.1032 | Acc: 96.50% | Val Top-1: 96.13%
+  Epoch 6/10 | Loss: 0.0910 | Acc: 96.92% | Val Top-1: 95.80%
+  Epoch 7/10 | Loss: 0.0816 | Acc: 97.24% | Val Top-1: 96.44%
+  Epoch 8/10 | Loss: 0.0760 | Acc: 97.53% | Val Top-1: 96.67%
+  Epoch 9/10 | Loss: 0.0709 | Acc: 97.62% | Val Top-1: 96.76%
+  Epoch 10/10 | Loss: 0.0681 | Acc: 97.77% | Val Top-1: 96.78%
+[CLIPAdapter_R16_a0.2] Done in 1850.9s | Final Loss: 0.0681 | Best Val: 96.78%
+[CLIPAdapter_R16_a0.2] Top-1: 96.78% | Top-5: 100.00% | Params: 33,312 | 43.2s
+
+--- Starting Alpha Sweep ---
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 4, Alpha = 0.1
+==================================================================
+[CLIPAdapter_R4_a0.1] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3994 | Acc: 48.69% | Val Top-1: 52.76%
+  Epoch 2/10 | Loss: 0.2617 | Acc: 91.33% | Val Top-1: 94.43%
+  Epoch 3/10 | Loss: 0.1361 | Acc: 95.55% | Val Top-1: 95.80%
+  Epoch 4/10 | Loss: 0.1101 | Acc: 96.29% | Val Top-1: 96.15%
+  Epoch 5/10 | Loss: 0.0943 | Acc: 96.83% | Val Top-1: 96.31%
+  Epoch 6/10 | Loss: 0.0835 | Acc: 97.11% | Val Top-1: 96.69%
+  Epoch 7/10 | Loss: 0.0733 | Acc: 97.51% | Val Top-1: 96.81%
+  Epoch 8/10 | Loss: 0.0648 | Acc: 97.87% | Val Top-1: 97.04%
+  Epoch 9/10 | Loss: 0.0593 | Acc: 98.10% | Val Top-1: 97.00%
+  Epoch 10/10 | Loss: 0.0560 | Acc: 98.16% | Val Top-1: 97.11%
+[CLIPAdapter_R4_a0.1] Done in 2128.4s | Final Loss: 0.0560 | Best Val: 97.11%
+[CLIPAdapter_R4_a0.1] Top-1: 97.11% | Top-5: 100.00% | Params: 131,712 | 39.7s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 4, Alpha = 0.2
+==================================================================
+[CLIPAdapter_R4_a0.2] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3132 | Acc: 52.37% | Val Top-1: 59.09%
+  Epoch 2/10 | Loss: 0.2292 | Acc: 92.46% | Val Top-1: 95.00%
+  Epoch 3/10 | Loss: 0.1315 | Acc: 95.56% | Val Top-1: 95.44%
+  Epoch 4/10 | Loss: 0.1051 | Acc: 96.44% | Val Top-1: 96.39%
+  Epoch 5/10 | Loss: 0.0879 | Acc: 96.98% | Val Top-1: 96.69%
+  Epoch 6/10 | Loss: 0.0747 | Acc: 97.40% | Val Top-1: 96.37%
+  Epoch 7/10 | Loss: 0.0637 | Acc: 97.84% | Val Top-1: 96.57%
+  Epoch 8/10 | Loss: 0.0550 | Acc: 98.17% | Val Top-1: 96.94%
+  Epoch 9/10 | Loss: 0.0486 | Acc: 98.35% | Val Top-1: 97.02%
+  Epoch 10/10 | Loss: 0.0453 | Acc: 98.51% | Val Top-1: 97.17%
+[CLIPAdapter_R4_a0.2] Done in 1836.2s | Final Loss: 0.0453 | Best Val: 97.17%
+[CLIPAdapter_R4_a0.2] Top-1: 97.17% | Top-5: 100.00% | Params: 131,712 | 30.9s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 4, Alpha = 0.5
+==================================================================
+[CLIPAdapter_R4_a0.5] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.0846 | Acc: 60.66% | Val Top-1: 72.26%
+  Epoch 2/10 | Loss: 0.2141 | Acc: 92.95% | Val Top-1: 94.46%
+  Epoch 3/10 | Loss: 0.1276 | Acc: 95.70% | Val Top-1: 95.96%
+  Epoch 4/10 | Loss: 0.1016 | Acc: 96.48% | Val Top-1: 96.30%
+  Epoch 5/10 | Loss: 0.0858 | Acc: 97.01% | Val Top-1: 96.33%
+  Epoch 6/10 | Loss: 0.0692 | Acc: 97.60% | Val Top-1: 96.50%
+  Epoch 7/10 | Loss: 0.0579 | Acc: 98.03% | Val Top-1: 96.78%
+  Epoch 8/10 | Loss: 0.0461 | Acc: 98.44% | Val Top-1: 96.67%
+  Epoch 9/10 | Loss: 0.0372 | Acc: 98.76% | Val Top-1: 96.87%
+  Epoch 10/10 | Loss: 0.0324 | Acc: 98.94% | Val Top-1: 96.94%
+[CLIPAdapter_R4_a0.5] Done in 1726.4s | Final Loss: 0.0324 | Best Val: 96.94%
+[CLIPAdapter_R4_a0.5] Top-1: 96.94% | Top-5: 100.00% | Params: 131,712 | 32.0s
+
+==================================================================
+Running CLIP-Adapter Experiment: Reduction Ratio = 4, Alpha = 0.8
+==================================================================
+[CLIPAdapter_R4_a0.8] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 0.7777 | Acc: 73.60% | Val Top-1: 85.96%
+  Epoch 2/10 | Loss: 0.2206 | Acc: 92.87% | Val Top-1: 92.81%
+  Epoch 3/10 | Loss: 0.1256 | Acc: 95.85% | Val Top-1: 96.13%
+  Epoch 4/10 | Loss: 0.1069 | Acc: 96.27% | Val Top-1: 95.74%
+  Epoch 5/10 | Loss: 0.0875 | Acc: 96.91% | Val Top-1: 96.57%
+  Epoch 6/10 | Loss: 0.0688 | Acc: 97.62% | Val Top-1: 96.41%
+  Epoch 7/10 | Loss: 0.0553 | Acc: 98.05% | Val Top-1: 96.37%
+  Epoch 8/10 | Loss: 0.0460 | Acc: 98.38% | Val Top-1: 96.56%
+  Epoch 9/10 | Loss: 0.0364 | Acc: 98.82% | Val Top-1: 97.06%
+  Epoch 10/10 | Loss: 0.0309 | Acc: 98.99% | Val Top-1: 97.15%
+[CLIPAdapter_R4_a0.8] Done in 1794.9s | Final Loss: 0.0309 | Best Val: 97.15%
+[CLIPAdapter_R4_a0.8] Top-1: 97.15% | Top-5: 100.00% | Params: 131,712 | 33.5s
+[Plot] Saved: ./plots/clip_adapter_reduction_sweep.png
+[Plot] Saved: ./plots/clip_adapter_alpha_sweep.png
+
+CLIP-Adapter hyperparameter exploration complete!
