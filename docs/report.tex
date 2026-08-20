@@ -1,0 +1,98 @@
+# Multi-Dataset Support for CLIP Adaptation Benchmark
+
+Aggiungere supporto per 8 dataset aggiuntivi oltre a EuroSAT, mantenendo la stessa interfaccia `(image, label, class_text)` e la compatibilità con tutti i metodi esistenti (ZeroShot, LinearProbe, OT, e i futuri CoOp/Adapter).
+
+## Classificazione dei Dataset
+
+### Auto-download (torchvision)
+| Dataset | Classi | Immagini | Dominio | Prompt Template |
+|---|---|---|---|---|
+| **EuroSAT** (esistente) | 10 | 27,000 | Satellite | `"a satellite image of {}"` |
+| **DTD** | 47 | 5,640 | Texture | `"a photo of a {} texture"` |
+| **Flowers102** | 102 | 8,189 | Botanica | `"a photo of a {}, a type of flower"` |
+| **FGVCAircraft** | 100 | 10,000 | Fine-grained | `"a photo of a {}, a type of aircraft"` |
+| **StanfordCars** | 196 | 16,185 | Fine-grained | `"a photo of a {}"` |
+
+### Manual download (ImageFolder)
+| Dataset | Classi | Immagini | Dominio | Prompt Template |
+|---|---|---|---|---|
+| **RESISC45** | 45 | 31,500 | Satellite | `"a satellite image of {}"` |
+| **UCMerced** | 21 | 2,100 | Satellite | `"a satellite image of {}"` |
+| **AID** | 30 | 10,000 | Aereo | `"an aerial image of {}"` |
+| **PatternNet** | 38 | 30,400 | Satellite | `"a satellite image of {}"` |
+
+> [!IMPORTANT]
+> I dataset "Manual download" richiedono che l'utente scarichi i dati e li posizioni in `./data/<nome_dataset>/` con struttura ImageFolder (`classe/immagine.jpg`). Il codice rileverà automaticamente le classi dai nomi delle cartelle.
+
+> [!WARNING]
+> **StanfordCars**: il download ufficiale è spesso non disponibile. Se fallisce, verrà trattato come dataset ImageFolder (l'utente scarica manualmente).
+
+## Proposed Changes
+
+### Dataset Module
+
+#### [MODIFY] [dataset.py](file:///c:/Code/APAI/APAI_exam/dataset.py)
+
+Riscrittura completa per supporto multi-dataset:
+
+1. **Registry `DATASET_CONFIGS`**: dizionario che mappa `dataset_name → DatasetConfig` con:
+   - `class_names`: lista delle classi (per torchvision) o `None` (per ImageFolder, auto-detect)
+   - `prompt_template`: template specifico per dominio
+   - `loader_type`: `"torchvision"` o `"imagefolder"`
+   - `torchvision_class`: la classe torchvision (es. `datasets.DTD`)
+   - `split_ratios`: come dividere train/test se il dataset non ha split builtin
+
+2. **Classe `CLIPDataset`**: wrapper generico che sostituisce `EuroSATDataset`, accetta qualsiasi dataset torchvision o ImageFolder e ritorna `(image, label, class_text)`.
+
+3. **Funzione `get_dataloaders(dataset_name="eurosat", ...)`**: factory aggiornata con parametro `dataset_name`. Ritorna `(train_loader, test_loader, dataset_info)` dove `dataset_info` contiene `class_names` e `prompt_template`.
+
+4. **Backward compatibility**: `EUROSAT_CLASS_NAMES` e `PROMPT_TEMPLATE` restano esportati come alias.
+
+5. **Funzione `list_available_datasets()`**: ritorna i nomi disponibili.
+
+---
+
+### Baselines e OT
+
+#### [MODIFY] [baselines.py](file:///c:/Code/APAI/APAI_exam/baselines.py)
+
+Cambiamento minimale: il parametro `class_names` e il template non hanno più default hardcoded a EuroSAT — vengono passati esplicitamente dal chiamante.
+
+#### [MODIFY] [optimal_transport.py](file:///c:/Code/APAI/APAI_exam/optimal_transport.py)
+
+Stesso cambiamento: rimuovere il default `EUROSAT_CLASS_NAMES` e richiedere che vengano passati.
+
+---
+
+### Engine
+
+#### [MODIFY] [engine.py](file:///c:/Code/APAI/APAI_exam/engine.py)
+
+1. `run_all_evaluations()` accetta `dataset_name` e usa `get_dataloaders(dataset_name)` per ottenere i loader e le classi.
+2. `train()` accetta `class_names` e `prompt_template` esplicitamente (già ha `class_names` opzionale).
+3. `__main__` accetta `--dataset` da command line con argparse.
+
+---
+
+### Documentation
+
+#### [MODIFY] [README.md](file:///c:/Code/APAI/APAI_exam/README.md)
+
+Aggiornare con la lista dei dataset supportati e le istruzioni per il download manuale.
+
+## Verification Plan
+
+### Automated Tests
+```bash
+# Verifica che il modulo si importi correttamente e che il registry sia completo
+python -c "from dataset import list_available_datasets; print(list_available_datasets())"
+
+# Verifica backward compatibility  
+python -c "from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE; print(len(EUROSAT_CLASS_NAMES), PROMPT_TEMPLATE)"
+
+# Verifica get_dataloaders con EuroSAT (già scaricato)
+python -c "from dataset import get_dataloaders; tl, vl, info = get_dataloaders('eurosat', batch_size=4, num_workers=0); print(info); imgs, labs, txts = next(iter(tl)); print(imgs.shape, labs, txts)"
+```
+
+### Manual Verification
+- Testare download automatico di DTD (un dataset piccolo da torchvision) per validare il flusso completo.

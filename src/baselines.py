@@ -41,10 +41,10 @@ from typing import List, Tuple
 
 try:
     from src.base_model import BaseCLIPWrapper
-    from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+    from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE, EUROSAT_PROMPT_TEMPLATES
 except ModuleNotFoundError:
     from base_model import BaseCLIPWrapper
-    from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+    from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE, EUROSAT_PROMPT_TEMPLATES
 
 
 
@@ -123,6 +123,125 @@ class ZeroShotCLIP:
         similarities = image_features @ self.text_prototypes.T
 
         # Step 3: The predicted class is the one with highest similarity.
+        predictions = similarities.argmax(dim=-1)
+
+        return predictions, similarities
+
+
+# ============================================================================
+# Baseline 1b: Zero-Shot CLIP with Prompt Ensembling
+# ============================================================================
+class ZeroShotEnsembleCLIP:
+    """
+    Zero-shot classification with prompt ensembling.
+
+    Instead of using a single prompt template (e.g., "a satellite image of {}"),
+    this method generates text features using **multiple templates** and
+    **averages** them for each class.  This is the evaluation protocol
+    recommended in the original CLIP paper (Radford et al., 2021, §3.1.4).
+
+    **Why this helps:**
+
+    Different phrasings activate different parts of CLIP's learned
+    text-image alignment.  For example, "a satellite image of forest"
+    and "an aerial view of forest" encode slightly different aspects of
+    the concept "forest".  Averaging these embeddings produces a text
+    prototype that is more centered in the relevant region of the
+    embedding space, reducing sensitivity to any single phrasing.
+
+    The procedure for each class c is:
+      1. For each template t ∈ T, compute text_features(t.format(c)).
+      2. Average all T feature vectors:  mean_feat = (1/|T|) Σ_t feat_t.
+      3. L2-normalize the averaged vector.
+
+    Parameters
+    ----------
+    clip_wrapper : BaseCLIPWrapper
+        Frozen CLIP model.
+    class_names : List[str]
+        Raw class names.
+    templates : List[str]
+        Prompt templates, each containing a ``{}`` placeholder for the
+        class name.  Defaults to ``EUROSAT_PROMPT_TEMPLATES``.
+    """
+
+    def __init__(
+        self,
+        clip_wrapper: BaseCLIPWrapper,
+        class_names: List[str] = EUROSAT_CLASS_NAMES,
+        templates: List[str] = EUROSAT_PROMPT_TEMPLATES,
+    ) -> None:
+        self.clip_wrapper = clip_wrapper
+        self.templates = templates
+
+        # ----------------------------------------------------------------
+        # Build ensembled text prototypes.
+        #
+        # For each class, we encode it under every template, average the
+        # resulting feature vectors, and L2-normalize.  The final tensor
+        # has shape (num_classes, D) — identical to the single-template
+        # version, so the rest of the pipeline is unchanged.
+        # ----------------------------------------------------------------
+        self.text_prototypes = self._build_ensemble_prototypes(class_names)
+
+    @torch.no_grad()
+    def _build_ensemble_prototypes(
+        self, class_names: List[str]
+    ) -> torch.Tensor:
+        """
+        Compute ensembled text prototypes by averaging across templates.
+
+        Returns
+        -------
+        prototypes : torch.Tensor
+            L2-normalized text prototypes, shape (num_classes, D).
+        """
+        all_class_features = []
+
+        for class_name in class_names:
+            # Generate one prompt per template for this class.
+            prompts = [t.format(class_name) for t in self.templates]
+
+            # Encode all prompts → (num_templates, D), already L2-normed.
+            features = self.clip_wrapper.get_text_features(prompts)
+
+            # Average across templates → (D,)
+            mean_feature = features.mean(dim=0)
+
+            # Re-normalize after averaging (the mean of unit vectors is
+            # generally NOT a unit vector).
+            mean_feature = mean_feature / mean_feature.norm()
+
+            all_class_features.append(mean_feature)
+
+        # Stack into (num_classes, D).
+        return torch.stack(all_class_features, dim=0)
+
+    @torch.no_grad()
+    def predict(
+        self, images: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Predict class labels using ensembled text prototypes.
+
+        Identical interface to ``ZeroShotCLIP.predict()`` — the only
+        difference is that ``self.text_prototypes`` were built via
+        averaging over multiple templates.
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            Batch of preprocessed images, shape (B, 3, 224, 224).
+
+        Returns
+        -------
+        predictions : torch.Tensor
+            Predicted class indices, shape (B,).
+        similarities : torch.Tensor
+            Cosine similarity matrix, shape (B, num_classes).
+        """
+        image_features = self.clip_wrapper.get_image_features(images)
+        similarities = image_features @ self.text_prototypes.T
         predictions = similarities.argmax(dim=-1)
 
         return predictions, similarities

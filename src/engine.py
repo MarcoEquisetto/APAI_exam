@@ -60,6 +60,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
+from sklearn.metrics import confusion_matrix, classification_report
 from typing import Dict, Any, Optional, List
 
 # Use non-interactive backend so plots can be saved without a display.
@@ -194,6 +195,8 @@ def evaluate(
     correct_top1 = 0
     correct_top5 = 0
     total_samples = 0
+    all_predictions = []
+    all_labels = []
     start_time = time.time()
 
     if torch.cuda.is_available():
@@ -211,6 +214,10 @@ def evaluate(
 
         # Top-1 accuracy
         correct_top1 += (predictions == labels).sum().item()
+
+        # Collect all predictions and labels for per-class analysis.
+        all_predictions.append(predictions)
+        all_labels.append(labels)
 
         # Top-5 accuracy
         num_classes = scores.shape[1]
@@ -244,12 +251,18 @@ def evaluate(
     top5_accuracy = correct_top5 / total_samples * 100
     gpu_memory = _get_gpu_memory_mb()
 
+    # Concatenate all batch-level predictions and labels.
+    all_predictions = torch.cat(all_predictions, dim=0).numpy()
+    all_labels = torch.cat(all_labels, dim=0).numpy()
+
     metrics = {
         "top1_accuracy": top1_accuracy,
         "top5_accuracy": top5_accuracy,
         "trainable_params": trainable_params,
         "total_samples": total_samples,
         "eval_time_seconds": eval_time,
+        "all_predictions": all_predictions,
+        "all_labels": all_labels,
         **gpu_memory,
     }
 
@@ -662,12 +675,12 @@ def run_all_evaluations(
     """
     try:
         from src.base_model import BaseCLIPWrapper
-        from src.baselines import ZeroShotCLIP, LinearProbeCLIP
+        from src.baselines import ZeroShotCLIP, ZeroShotEnsembleCLIP, LinearProbeCLIP
         from src.optimal_transport import OptimalTransportCLIP
         from src.dataset import get_dataloaders
     except ModuleNotFoundError:
         from base_model import BaseCLIPWrapper
-        from baselines import ZeroShotCLIP, LinearProbeCLIP
+        from baselines import ZeroShotCLIP, ZeroShotEnsembleCLIP, LinearProbeCLIP
         from optimal_transport import OptimalTransportCLIP
         from dataset import get_dataloaders
 
@@ -680,6 +693,12 @@ def run_all_evaluations(
     zs_model = ZeroShotCLIP(clip_wrapper)
     all_results["ZeroShot"] = evaluate(
         zs_model, test_loader, model_name="ZeroShot", use_wandb=use_wandb,
+    )
+
+
+    zs_ensemble = ZeroShotEnsembleCLIP(clip_wrapper)
+    all_results["ZeroShot-Ensemble"] = evaluate(
+        zs_ensemble, test_loader, model_name="ZeroShot-Ensemble", use_wandb=use_wandb,
     )
 
 
@@ -916,6 +935,229 @@ def plot_comparative_results(
 
 
 # ============================================================================
+# Confusion Matrices
+# ============================================================================
+
+def plot_confusion_matrices(
+    all_results: Dict[str, Dict[str, Any]],
+    class_names: Optional[List[str]] = None,
+    save_dir: str = "./plots",
+) -> None:
+    """
+    Generate and save a confusion matrix heatmap for each evaluated model.
+
+    Each matrix shows predicted class (x-axis) vs. true class (y-axis).
+    Values are **normalized per row** (i.e., each row sums to 1.0) so that
+    the diagonal shows per-class recall.  This makes it easy to spot which
+    classes are frequently confused.
+
+    Parameters
+    ----------
+    all_results : Dict[str, Dict[str, Any]]
+        Output from ``run_all_evaluations()``.  Each entry must contain
+        ``"all_predictions"`` and ``"all_labels"`` arrays.
+    class_names : Optional[List[str]]
+        Human-readable class names for axis labels.
+        Defaults to ``EUROSAT_CLASS_NAMES``.
+    save_dir : str
+        Directory where plots are saved.
+    """
+    try:
+        from src.dataset import EUROSAT_CLASS_NAMES
+    except ModuleNotFoundError:
+        from dataset import EUROSAT_CLASS_NAMES
+
+    if class_names is None:
+        class_names = EUROSAT_CLASS_NAMES
+
+    if save_dir == "./plots" and not os.path.exists("./plots"):
+        save_dir = str(PROJECT_ROOT / "plots")
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Shortened labels for readability on the axes.
+    short_names = [n.replace(" land", "").replace(" buildings", "").title()
+                   for n in class_names]
+
+    n_models = len(all_results)
+    # Arrange in a grid: up to 3 columns.
+    n_cols = min(3, n_models)
+    n_rows = (n_models + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=(6 * n_cols, 5.5 * n_rows),
+        squeeze=False,
+    )
+
+    for idx, (model_name, metrics) in enumerate(all_results.items()):
+        row, col = divmod(idx, n_cols)
+        ax = axes[row][col]
+
+        preds = metrics["all_predictions"]
+        labels = metrics["all_labels"]
+
+        # Compute row-normalized confusion matrix (each row sums to 1.0).
+        cm = confusion_matrix(labels, preds, labels=range(len(class_names)))
+        cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+        # Handle classes with zero samples (avoid NaN).
+        cm_norm = np.nan_to_num(cm_norm, nan=0.0)
+
+        im = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues",
+                       vmin=0, vmax=1)
+        ax.set_title(
+            f"{model_name}\n(Top-1: {metrics['top1_accuracy']:.1f}%)",
+            fontsize=11, fontweight="bold",
+        )
+
+        # Add text annotations on each cell.
+        for i in range(len(class_names)):
+            for j in range(len(class_names)):
+                val = cm_norm[i, j]
+                color = "white" if val > 0.5 else "black"
+                ax.text(j, i, f"{val:.2f}", ha="center", va="center",
+                        fontsize=7, color=color)
+
+        ax.set_xticks(range(len(class_names)))
+        ax.set_yticks(range(len(class_names)))
+        ax.set_xticklabels(short_names, rotation=45, ha="right", fontsize=8)
+        ax.set_yticklabels(short_names, fontsize=8)
+        ax.set_xlabel("Predicted", fontsize=9)
+        ax.set_ylabel("True", fontsize=9)
+
+    # Hide unused subplots.
+    for idx in range(n_models, n_rows * n_cols):
+        row, col = divmod(idx, n_cols)
+        axes[row][col].set_visible(False)
+
+    fig.suptitle(
+        "Confusion Matrices (Row-Normalized)",
+        fontsize=14, fontweight="bold", y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(
+        os.path.join(save_dir, "confusion_matrices.png"),
+        dpi=150, bbox_inches="tight",
+    )
+    plt.close(fig)
+    print(f"[Plot] Saved: {save_dir}/confusion_matrices.png")
+
+
+# ============================================================================
+# Per-Class Accuracy Comparison
+# ============================================================================
+
+def plot_per_class_metrics(
+    all_results: Dict[str, Dict[str, Any]],
+    class_names: Optional[List[str]] = None,
+    save_dir: str = "./plots",
+) -> None:
+    """
+    Generate a grouped bar chart comparing per-class accuracy across models.
+
+    For each class, we show the recall (= per-class accuracy) of every model
+    side by side.  This makes it easy to answer questions like:
+      - "Which classes does ZeroShot struggle with the most?"
+      - "Does Prompt Ensembling help uniformly, or only on specific classes?"
+      - "Is there a class where OT actually beats cosine similarity?"
+
+    Also prints a concise classification report to the console.
+
+    Parameters
+    ----------
+    all_results : Dict[str, Dict[str, Any]]
+        Output from ``run_all_evaluations()``.
+    class_names : Optional[List[str]]
+        Class names for labeling.
+    save_dir : str
+        Directory where plots are saved.
+    """
+    try:
+        from src.dataset import EUROSAT_CLASS_NAMES
+    except ModuleNotFoundError:
+        from dataset import EUROSAT_CLASS_NAMES
+
+    if class_names is None:
+        class_names = EUROSAT_CLASS_NAMES
+
+    if save_dir == "./plots" and not os.path.exists("./plots"):
+        save_dir = str(PROJECT_ROOT / "plots")
+    os.makedirs(save_dir, exist_ok=True)
+
+    short_names = [n.replace(" land", "").replace(" buildings", "").title()
+                   for n in class_names]
+    n_classes = len(class_names)
+    model_names = list(all_results.keys())
+    n_models = len(model_names)
+
+    # Compute per-class accuracy (recall) for each model.
+    per_class_acc = {}  # model_name -> array of shape (n_classes,)
+
+    for model_name, metrics in all_results.items():
+        preds = metrics["all_predictions"]
+        labels = metrics["all_labels"]
+
+        # Per-class accuracy = diagonal of row-normalized confusion matrix.
+        cm = confusion_matrix(labels, preds, labels=range(n_classes))
+        row_sums = cm.sum(axis=1)
+        # Avoid division by zero for classes with no samples.
+        row_sums[row_sums == 0] = 1
+        class_acc = cm.diagonal().astype(float) / row_sums * 100
+        per_class_acc[model_name] = class_acc
+
+        # Print a concise classification report.
+        print(f"\n{'='*60}")
+        print(f"Classification Report: {model_name}")
+        print(f"{'='*60}")
+        report = classification_report(
+            labels, preds,
+            target_names=short_names,
+            digits=2,
+            zero_division=0,
+        )
+        print(report)
+
+    # ----------------------------------------------------------------
+    # Grouped bar chart
+    # ----------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    x = np.arange(n_classes)
+    bar_width = 0.8 / n_models
+    colors = plt.cm.Set2(np.linspace(0, 1, max(n_models, 3)))
+
+    for i, model_name in enumerate(model_names):
+        offset = (i - n_models / 2 + 0.5) * bar_width
+        ax.bar(
+            x + offset,
+            per_class_acc[model_name],
+            bar_width,
+            label=model_name,
+            color=colors[i],
+            edgecolor="white",
+            linewidth=0.5,
+        )
+
+    ax.set_xlabel("Class", fontsize=12)
+    ax.set_ylabel("Per-Class Accuracy (%)", fontsize=12)
+    ax.set_title(
+        "Per-Class Accuracy Comparison Across Models",
+        fontsize=14, fontweight="bold", pad=15,
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(short_names, rotation=30, ha="right", fontsize=10)
+    ax.legend(fontsize=9, loc="lower right", ncol=2)
+    ax.set_ylim(0, 105)
+    ax.grid(axis="y", alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(
+        os.path.join(save_dir, "per_class_accuracy.png"),
+        dpi=150, bbox_inches="tight",
+    )
+    plt.close(fig)
+    print(f"\n[Plot] Saved: {save_dir}/per_class_accuracy.png")
+
+
+# ============================================================================
 # Entry point: run this file directly to evaluate all baselines
 # ============================================================================
 if __name__ == "__main__":
@@ -937,3 +1179,7 @@ if __name__ == "__main__":
 
     # Generate and save comparative plots.
     plot_comparative_results(results, save_dir="./plots")
+
+    # Generate confusion matrices and per-class analysis.
+    plot_confusion_matrices(results, save_dir="./plots")
+    plot_per_class_metrics(results, save_dir="./plots")

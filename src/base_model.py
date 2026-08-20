@@ -40,25 +40,6 @@ from typing import List, Tuple
 
 
 class BaseCLIPWrapper(nn.Module):
-    """
-    Frozen OpenCLIP model wrapper.
-
-    All parameters of the underlying CLIP model are frozen at init time.
-    Subclasses can add trainable parameters (e.g., adapters, prompts) and
-    override the feature-extraction methods to route data through those
-    trainable components.
-
-    Parameters
-    ----------
-    model_name : str
-        OpenCLIP model architecture, e.g. "ViT-B-32".
-    pretrained : str
-        Pretrained weight tag, e.g. "laion2b_s34b_b79k".
-        Run ``open_clip.list_pretrained()`` for all available options.
-    device : str
-        "cuda" or "cpu".
-    """
-
     def __init__(
         self,
         model_name: str = "ViT-B-32",
@@ -66,19 +47,7 @@ class BaseCLIPWrapper(nn.Module):
         device: str = "cuda",
     ) -> None:
         super().__init__()
-
         self.device = device
-
-        # ----------------------------------------------------------------
-        # Load the OpenCLIP model and its associated tokenizer.
-        # ``open_clip.create_model_and_transforms`` returns three objects:
-        #   1. model       — the nn.Module with vision + text towers
-        #   2. preprocess_train — training augmentation pipeline (unused here
-        #                         because we define our own in dataset.py)
-        #   3. preprocess_val   — validation preprocessing pipeline (unused)
-        #
-        # We discard the transforms and only keep the model.
-        # ----------------------------------------------------------------
         self.model, _, _ = open_clip.create_model_and_transforms(
             model_name, pretrained=pretrained
         )

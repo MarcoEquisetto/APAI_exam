@@ -13,6 +13,7 @@ dependencies:
   - matplotlib
   - tqdm
   - scikit-learn
+  - scipy
   - pip
   - pip:
     - transformers
