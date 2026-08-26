@@ -30,6 +30,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 from typing import List, Tuple, Optional
 
 try:
@@ -67,7 +68,7 @@ class VisionAdapterModule(nn.Module):
         self.embed_dim = embed_dim
         self.reduction_ratio = reduction_ratio
         self.hidden_dim = embed_dim // reduction_ratio
-        self.alpha = alpha
+        self.alpha = nn.Parameter(torch.tensor(alpha))
 
         self.down_proj = nn.Linear(self.embed_dim, self.hidden_dim, bias=True)
         self.act = nn.ReLU()
@@ -203,7 +204,8 @@ class CLIPAdapterModel(BaseCLIPWrapper):
     def set_alpha(self, new_alpha: float) -> None:
         """Dynamically update the residual blending factor alpha."""
         self.alpha = new_alpha
-        self.adapter.alpha = new_alpha
+        with torch.no_grad():
+            self.adapter.alpha.copy_(torch.tensor(new_alpha))
 
     @torch.no_grad()
     def predict(
@@ -305,6 +307,40 @@ class TipAdapterModel(BaseCLIPWrapper):
         self.cache_values = torch.cat(values_list, dim=0) # (N, C)
         print(f"Tip-Adapter cache built: keys {self.cache_keys.shape}, values {self.cache_values.shape}")
 
+    def finetune_cache(self, dataloader, epochs: int = 20, lr: float = 1e-3) -> None:
+        """
+        Fine-tune the key cache (Tip-Adapter-F).
+        Transforms the cache into learnable parameters and optimizes them using Cross Entropy Loss.
+        """
+        if self.cache_keys is None:
+            raise ValueError("Cache not built. Call build_cache() first.")
+        
+        self.cache_keys = nn.Parameter(self.cache_keys.clone())
+        optimizer = torch.optim.AdamW([self.cache_keys], lr=lr)
+        
+        self.model.eval()
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            for images, labels, _ in dataloader:
+                images, labels = images.to(self.device), labels.to(self.device)
+                
+                with torch.no_grad():
+                    test_features = self.model.encode_image(images)
+                    test_features = test_features / test_features.norm(dim=-1, keepdim=True)
+                    clip_logits = 100.0 * test_features @ self.text_prototypes.T
+                
+                affinity = test_features @ self.cache_keys.T
+                cache_logits = ((-1) * (self.beta - self.beta * affinity)).exp() @ self.cache_values
+                logits = clip_logits + cache_logits * self.alpha
+                
+                loss = F.cross_entropy(logits, labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+            # print(f"Tip-Adapter-F Epoch {epoch+1}/{epochs}, Loss: {epoch_loss/len(dataloader):.4f}")
+
     @torch.no_grad()
     def predict(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -331,6 +367,84 @@ class TipAdapterModel(BaseCLIPWrapper):
 
         predictions = logits.argmax(dim=-1)
         return predictions, logits
+
+
+class LinearLoRA(nn.Module):
+    """
+    Wraps an existing nn.Linear layer to inject Low-Rank Adaptation (LoRA) matrices.
+    """
+    def __init__(self, linear_layer: nn.Linear, r: int = 4, alpha: float = 1.0):
+        super().__init__()
+        self.linear = linear_layer # The frozen pretrained layer
+        self.r = r
+        self.alpha = alpha
+        
+        in_features = self.linear.in_features
+        out_features = self.linear.out_features
+        
+        self.lora_A = nn.Parameter(torch.zeros(in_features, r))
+        self.lora_B = nn.Parameter(torch.zeros(r, out_features))
+        self.scaling = alpha / r
+        
+        nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_B)
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.linear(x)
+        lora_out = (x @ self.lora_A @ self.lora_B) * self.scaling
+        return out + lora_out
+
+
+class VisionLoRAModel(BaseCLIPWrapper):
+    """
+    Subclass of BaseCLIPWrapper with Low-Rank Adaptation (LoRA) injected into the Vision Transformer.
+    """
+    def __init__(
+        self,
+        model_name: str = "ViT-B-32",
+        pretrained: str = "laion2b_s34b_b79k",
+        device: str = "cuda",
+        r: int = 4,
+        lora_alpha: float = 1.0,
+        class_names: List[str] = EUROSAT_CLASS_NAMES,
+    ) -> None:
+        super().__init__(
+            model_name=model_name,
+            pretrained=pretrained,
+            device=device,
+        )
+        self.r = r
+        self.lora_alpha = lora_alpha
+        self.class_names = class_names
+
+        # Inject LoRA into the vision transformer's MLP layers
+        for block in self.model.visual.transformer.resblocks:
+            if hasattr(block.mlp, "c_fc") and isinstance(block.mlp.c_fc, nn.Linear):
+                block.mlp.c_fc = LinearLoRA(block.mlp.c_fc, r=r, alpha=lora_alpha).to(device)
+            if hasattr(block.mlp, "c_proj") and isinstance(block.mlp.c_proj, nn.Linear):
+                block.mlp.c_proj = LinearLoRA(block.mlp.c_proj, r=r, alpha=lora_alpha).to(device)
+                
+        self._update_text_prototypes()
+
+    def _update_text_prototypes(self) -> None:
+        prompts = [PROMPT_TEMPLATE.format(name) for name in self.class_names]
+        with torch.no_grad():
+            self.text_prototypes = self.get_text_features(prompts)
+
+    def get_image_features(self, images: torch.Tensor) -> torch.Tensor:
+        """Extract image features allowing gradients to flow through LoRA layers."""
+        images = images.to(self.device)
+        # No torch.no_grad() here to allow gradients for LoRA parameters
+        image_features = self.model.encode_image(images)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        return image_features
+
+    @torch.no_grad()
+    def predict(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        image_features = self.get_image_features(images)
+        similarities = image_features @ self.text_prototypes.T
+        predictions = similarities.argmax(dim=-1)
+        return predictions, similarities
 
 
 # Test
@@ -366,14 +480,15 @@ if __name__ == "__main__":
     preds, sims = tip_model.predict(dummy_images)
     print(f"Tip-Adapter Predictions shape: {preds.shape}, Similarities shape: {sims.shape}")
 
-    print(f"\nTesting TipAdapterModel on device: {device}")
-    tip_model = TipAdapterModel(
+    print(f"\nTesting VisionLoRAModel on device: {device}")
+    lora_model = VisionLoRAModel(
         model_name="ViT-B-32",
         pretrained="laion2b_s34b_b79k",
         device=device,
+        r=4,
     )
-    # mock dataloader with 1 batch
-    dummy_labels = torch.randint(0, 10, (4,))
-    tip_model.build_cache([(dummy_images, dummy_labels, None)], num_shots=1)
-    preds, sims = tip_model.predict(dummy_images)
-    print(f"Tip-Adapter Predictions shape: {preds.shape}, Similarities shape: {sims.shape}")
+    features = lora_model.get_image_features(dummy_images)
+    print(f"LoRA Adapted Image Features shape: {features.shape}")
+    print(f"Trainable Parameters count: {lora_model.count_trainable_params():,}")
+    preds, sims = lora_model.predict(dummy_images)
+    print(f"LoRA Predictions shape: {preds.shape}, Similarities shape: {sims.shape}")
