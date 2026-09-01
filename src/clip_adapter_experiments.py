@@ -19,6 +19,12 @@ if str(FILE_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Plots and result JSONs always land in <repo>/plots, never in ./plots.
+# A relative path is resolved against the *current working directory*, so
+# running this script from inside src/ used to create a second, duplicate
+# src/plots/ tree — which is how the repository ended up tracking both.
+PLOTS_DIR = PROJECT_ROOT / "plots"
+
 from src.base_model import BaseCLIPWrapper
 from src.dataset import get_dataloaders
 from src.engine import train, evaluate, count_trainable_parameters
@@ -30,14 +36,17 @@ matplotlib.use("Agg")
 def run_single_experiment(
     reduction_ratio: int = 4,
     alpha: float = 0.2,
+    learnable_alpha: bool = False,
     epochs: int = 10,
     lr: float = 1e-3,
     batch_size: int = 64,
     device: str = "cuda",
     use_wandb: bool = False,
 ):
+    mode = "learned" if learnable_alpha else "fixed"
     print(f"\n==================================================================")
-    print(f"Running CLIP-Adapter Experiment: Reduction Ratio = {reduction_ratio}, Alpha = {alpha}")
+    print(f"Running CLIP-Adapter Experiment: Reduction Ratio = {reduction_ratio}, "
+          f"Alpha = {alpha} ({mode})")
     print(f"==================================================================")
 
     train_loader, test_loader = get_dataloaders(batch_size=batch_size, num_workers=0)
@@ -48,9 +57,13 @@ def run_single_experiment(
         device=device,
         reduction_ratio=reduction_ratio,
         alpha=alpha,
+        learnable_alpha=learnable_alpha,
     )
 
-    model_name = f"CLIPAdapter_R{reduction_ratio}_a{alpha}"
+    # The tag names every axis that changes the result. Without the alpha
+    # mode in it, a learned-alpha run silently overwrites the fixed-alpha
+    # run it should be compared against.
+    model_name = f"CLIPAdapter_R{reduction_ratio}_a{alpha}_{mode}"
 
     # Train model using standard engine loop
     history = train(
@@ -80,11 +93,15 @@ def run_single_experiment(
     metrics["history"] = history
     metrics["reduction_ratio"] = reduction_ratio
     metrics["alpha"] = alpha
+    metrics["learnable_alpha"] = learnable_alpha
+    # A learned alpha is unconstrained unless constrain_alpha is on, so the
+    # value it settled at is a result in its own right and has to be logged.
+    metrics["alpha_final"] = float(model.alpha)
 
     return model, metrics
 
 
-def plot_marco_sweeps(sweep_results: list, alpha_sweep_results: list = None, save_dir: str = "./plots"):
+def plot_marco_sweeps(sweep_results: list, alpha_sweep_results: list = None, save_dir: str = str(PLOTS_DIR)):
     """Generate comparative visualization plots for Marco's experiments."""
     os.makedirs(save_dir, exist_ok=True)
     plt.style.use("seaborn-v0_8-darkgrid")
@@ -159,8 +176,8 @@ if __name__ == "__main__":
         results.append(metrics)
 
     # Save metrics JSON
-    os.makedirs("./plots", exist_ok=True)
-    with open("./plots/clip_adapter_results.json", "w") as f:
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    with open(PLOTS_DIR / "clip_adapter_results.json", "w") as f:
         json.dump(results, f, indent=4)
 
     # Run alpha sweep
@@ -180,7 +197,7 @@ if __name__ == "__main__":
         )
         alpha_results.append(metrics)
 
-    with open("./plots/clip_adapter_alpha_results.json", "w") as f:
+    with open(PLOTS_DIR / "clip_adapter_alpha_results.json", "w") as f:
         json.dump(alpha_results, f, indent=4)
 
     # Plot results

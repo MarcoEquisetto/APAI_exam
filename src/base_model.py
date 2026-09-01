@@ -36,7 +36,7 @@ This pattern keeps the codebase modular and avoids code duplication.
 import torch
 import torch.nn as nn
 import open_clip
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 class BaseCLIPWrapper(nn.Module):
@@ -45,6 +45,8 @@ class BaseCLIPWrapper(nn.Module):
         model_name: str = "ViT-B-32",
         pretrained: str = "laion2b_s34b_b79k",
         device: str = "cuda",
+        class_names: Optional[List[str]] = None,
+        prompt_template: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.device = device
@@ -55,6 +57,36 @@ class BaseCLIPWrapper(nn.Module):
 
         # Store the tokenizer so we can convert text → token IDs on the fly.
         self.tokenizer = open_clip.get_tokenizer(model_name)
+
+        # ----------------------------------------------------------------
+        # Class set and prompt template.
+        #
+        # These live on the base class because ``predict()`` needs them:
+        # in this project there is no classification head, the "classes"
+        # *are* the text prototypes, so turning a class name into a prompt
+        # is part of the classifier itself.
+        #
+        # They default to EuroSAT so that every existing call site keeps
+        # working unchanged, but any subclass or caller can point them at
+        # DTD or Flowers102 — whose templates are different and whose
+        # accuracy collapses silently if the EuroSAT one is used instead
+        # ("a satellite image of banded" for a texture class).
+        #
+        # The import is deferred to call time: ``dataset.py`` pulls in
+        # torchvision, and this module must stay importable on its own.
+        # ----------------------------------------------------------------
+        if class_names is None or prompt_template is None:
+            try:
+                from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+            except ModuleNotFoundError:
+                from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
+            if class_names is None:
+                class_names = EUROSAT_CLASS_NAMES
+            if prompt_template is None:
+                prompt_template = PROMPT_TEMPLATE
+
+        self.class_names = list(class_names)
+        self.prompt_template = prompt_template
 
         # ----------------------------------------------------------------
         # FREEZE all parameters of the pretrained CLIP model.
@@ -199,6 +231,76 @@ class BaseCLIPWrapper(nn.Module):
         return x
 
     # ====================================================================
+    # Shared inference: one predict() for the whole project
+    # ====================================================================
+    # The brief is explicit: "Every method plugs into the same base class
+    # and the same evaluation loop.  No method reimplements evaluation."
+    # Before this method existed, ``predict()`` was written five times —
+    # three of them character-for-character identical — and the joint
+    # CoOp + CLIP-Adapter model inherited two of them in conflict.
+    # ====================================================================
+
+    def build_prompts(self) -> List[str]:
+        """
+        Turn the stored class names into full text prompts.
+
+        Returns
+        -------
+        prompts : List[str]
+            e.g. ``["a satellite image of forest", ...]``.
+
+        Notes
+        -----
+        Kept as a separate method so that a subclass which does not build
+        its prompts from strings at all can override it — or, like
+        ``CoOpModel``, simply ignore the result because its prompts are
+        continuous vectors rather than text.
+        """
+        return [self.prompt_template.format(name) for name in self.class_names]
+
+    @torch.no_grad()
+    def predict(
+        self, images: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Classify a batch of images against the text prototypes.
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            Batch of preprocessed images, shape (B, 3, 224, 224).
+
+        Returns
+        -------
+        predictions : torch.Tensor
+            ``(B,)`` predicted class indices.
+        similarities : torch.Tensor
+            ``(B, num_classes)`` cosine similarities.  ``engine.evaluate()``
+            expects exactly this pair.
+
+        Notes
+        -----
+        **The text prototypes are recomputed on every call, never cached.**
+        This looks wasteful — it is ten short prompts through the text
+        tower, negligible next to a batch of images — but it is what makes
+        the method correct for *every* subclass.  ``CoOpModel`` changes its
+        prompts after each optimizer step, so a cache built in ``__init__``
+        would go stale mid-training and silently report the accuracy of the
+        initial random context.
+
+        Methods with a genuinely different scoring rule still override this:
+        ``TipAdapterModel`` blends a key-value cache with the zero-shot
+        logits, and ``OptimalTransportCLIP`` returns *distances* rather than
+        similarities (which is why ``engine.evaluate()`` sniffs for
+        ``sinkhorn_reg`` before taking a top-k).
+        """
+        image_features = self.get_image_features(images)
+        text_features = self.get_text_features(self.build_prompts())
+
+        similarities = image_features @ text_features.T
+        return similarities.argmax(dim=-1), similarities
+
+    # ====================================================================
     # Utility: count trainable parameters
     # ====================================================================
     def count_trainable_params(self) -> int:
@@ -232,3 +334,17 @@ if __name__ == "__main__":
     print(f"Text features shape : {txt_feats.shape}")   # (2, 512)
 
     print(f"Trainable params    : {wrapper.count_trainable_params()}")  # 0
+
+    # The shared predict(): every method in the project inherits this one
+    # unless it has a genuinely different scoring rule.
+    print(f"Default prompts     : {wrapper.build_prompts()[:2]}")
+    preds, sims = wrapper.predict(dummy_images)
+    print(f"predict() shapes    : preds {tuple(preds.shape)}, sims {tuple(sims.shape)}")
+
+    # Same wrapper, different dataset: only the template and names change.
+    dtd_wrapper = BaseCLIPWrapper(
+        device=device,
+        class_names=["banded", "bubbly", "cracked"],
+        prompt_template="a photo of a {} texture",
+    )
+    print(f"DTD prompts         : {dtd_wrapper.build_prompts()}")

@@ -1,0 +1,15 @@
+# Normalize line endings so that a checkout on Windows and one on Linux
+# produce the same bytes.  Without this the repository mixes CRLF and LF
+# files, and git reports a file as modified when its content is identical —
+# noise that once hid a working tree silently reverted to an older commit.
+#
+# After adding this file, run once:  git add --renormalize .
+* text=auto eol=lf
+
+# Binary artefacts: never touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.pt  binary
+*.pth binary

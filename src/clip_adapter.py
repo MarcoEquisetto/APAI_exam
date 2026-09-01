@@ -55,6 +55,15 @@ class VisionAdapterModule(nn.Module):
     alpha : float
         Blending parameter between adapted features and original features.
         f_final = alpha * MLP(f_orig) + (1 - alpha) * f_orig
+    learnable_alpha : bool
+        False (default) -> alpha is a fixed hyperparameter, as in the
+        CLIP-Adapter paper and as required by the alpha sweep.
+        True -> alpha is trained together with the MLP.
+    constrain_alpha : bool
+        Only meaningful when learnable_alpha is True. Keeps alpha inside
+        (0, 1) by learning its logit and applying a sigmoid, so the residual
+        blend stays an interpolation. Set False to reproduce older runs
+        that trained an unconstrained alpha.
     """
 
     def __init__(
@@ -62,13 +71,49 @@ class VisionAdapterModule(nn.Module):
         embed_dim: int = 512,
         reduction_ratio: int = 4,
         alpha: float = 0.2,
+        learnable_alpha: bool = False,
+        constrain_alpha: bool = True,
     ) -> None:
         super().__init__()
 
         self.embed_dim = embed_dim
         self.reduction_ratio = reduction_ratio
         self.hidden_dim = embed_dim // reduction_ratio
-        self.alpha = nn.Parameter(torch.tensor(alpha))
+        self.learnable_alpha = learnable_alpha
+        self.constrain_alpha = constrain_alpha
+
+        # ------------------------------------------------------------------
+        # Alpha: fixed hyperparameter or learned scalar?
+        #
+        # Both are legitimate experiments and the project reports them as
+        # two separate ones.  They cannot be merged: an alpha sweep only
+        # means something if alpha stays where it is put, and the sweep
+        # numbers in the results tables were produced with a fixed alpha.
+        #
+        # When learned, alpha is stored as a *logit* and squashed through a
+        # sigmoid in forward().  The residual blend
+        #     f = a * MLP(f) + (1 - a) * f
+        # is an interpolation only for a in [0, 1]; an unconstrained
+        # parameter is free to leave that range and turn the blend into an
+        # extrapolation, which is a different model from the one the brief
+        # describes.  Parameterizing the logit keeps a in (0, 1) by
+        # construction, with no clamping and no gradient discontinuity.
+        # ------------------------------------------------------------------
+        if learnable_alpha:
+            if constrain_alpha:
+                a = float(min(max(alpha, 1e-4), 1.0 - 1e-4))
+                logit = math.log(a / (1.0 - a))
+                self.alpha_logit = nn.Parameter(torch.tensor(logit))
+            else:
+                # Legacy behaviour: a raw, unconstrained parameter.  Kept so
+                # that runs recorded before the constraint existed remain
+                # reproducible.
+                self.alpha_raw = nn.Parameter(torch.tensor(float(alpha)))
+        else:
+            # Plain Python float: contributes nothing to
+            # count_trainable_params(), which keeps the parameter counts in
+            # the "Accuracy vs. Trainable Parameters" plot honest.
+            self._alpha_value = float(alpha)
 
         self.down_proj = nn.Linear(self.embed_dim, self.hidden_dim, bias=True)
         self.act = nn.ReLU()
@@ -77,6 +122,35 @@ class VisionAdapterModule(nn.Module):
         # Using near-zero weights initialization so that f_adapted ~= f_origin (keeps pretrained visual representations mostly intact in the first training steps)
         self._init_weights()
 
+
+    @property
+    def alpha(self):
+        """
+        The effective blending factor, whatever the storage mode.
+
+        Returns a 0-dim tensor when alpha is learned (so gradients flow) and
+        a plain float when it is fixed. Both broadcast correctly in
+        forward(); float(module.alpha) works in either case, which is what
+        logging and the experiment scripts want.
+        """
+        if not self.learnable_alpha:
+            return self._alpha_value
+        if self.constrain_alpha:
+            return torch.sigmoid(self.alpha_logit)
+        return self.alpha_raw
+
+    @alpha.setter
+    def alpha(self, new_alpha: float) -> None:
+        """Set alpha in place, in whichever representation is active."""
+        if not self.learnable_alpha:
+            self._alpha_value = float(new_alpha)
+            return
+        with torch.no_grad():
+            if self.constrain_alpha:
+                a = float(min(max(new_alpha, 1e-4), 1.0 - 1e-4))
+                self.alpha_logit.fill_(math.log(a / (1.0 - a)))
+            else:
+                self.alpha_raw.fill_(float(new_alpha))
 
     def _init_weights(self) -> None:
         nn.init.kaiming_uniform_(self.down_proj.weight, a=0, mode="fan_in", nonlinearity="relu")
@@ -132,6 +206,22 @@ class CLIPAdapterModel(BaseCLIPWrapper):
         Bottleneck reduction ratio for the vision adapter.
     alpha : float
         Residual blending hyperparameter.
+    learnable_alpha : bool
+        Train alpha alongside the MLP instead of holding it fixed.
+        Default False: the alpha sweep is only meaningful with a fixed
+        alpha, so "fixed alpha" and "learned alpha" stay two distinct
+        experiments.
+    constrain_alpha : bool
+        Keep a learned alpha inside (0, 1) via a sigmoid. Ignored when
+        learnable_alpha is False.
+    class_names : List[str]
+        Raw class names, e.g. ["forest", "river", ...].
+    prompt_template : str
+        Template wrapped around each class name. Defaults to the EuroSAT
+        one; pass the dataset's own template (available as
+        `loader.dataset.prompt_template`) when running on DTD or
+        Flowers102, otherwise the prompts are nonsense and accuracy drops
+        with no error.
     """
 
 
@@ -142,17 +232,20 @@ class CLIPAdapterModel(BaseCLIPWrapper):
         device: str = "cuda",
         reduction_ratio: int = 4,
         alpha: float = 0.2,
+        learnable_alpha: bool = False,
+        constrain_alpha: bool = True,
         class_names: List[str] = EUROSAT_CLASS_NAMES,
+        prompt_template: str = PROMPT_TEMPLATE,
     ) -> None:
         super().__init__(
             model_name=model_name,
             pretrained=pretrained,
             device=device,
+            class_names=class_names,
+            prompt_template=prompt_template,
         )
 
         self.reduction_ratio = reduction_ratio
-        self.alpha = alpha
-        self.class_names = class_names
 
         # Extract vision embedding dimension to perform a dummy pass or inspect visual projection to get exact dim
         embed_dim = self.model.visual.output_tokens if hasattr(self.model.visual, "output_tokens") else 512
@@ -164,17 +257,28 @@ class CLIPAdapterModel(BaseCLIPWrapper):
             embed_dim=embed_dim,
             reduction_ratio=reduction_ratio,
             alpha=alpha,
+            learnable_alpha=learnable_alpha,
+            constrain_alpha=constrain_alpha,
         ).to(device)
 
-        # Cache text prototypes for predict() evaluation loop
+        # Cache text prototypes for anyone reading them directly.  Note that
+        # predict() no longer uses this cache: it is inherited from
+        # BaseCLIPWrapper, which recomputes the prototypes on every call so
+        # that the same method also works for models whose text side is
+        # being trained (CoOp, and the joint CoOp + adapter model).
         self._update_text_prototypes()
 
 
+    @property
+    def alpha(self):
+        """Effective blending factor, read straight from the adapter."""
+        return self.adapter.alpha
+
+
     def _update_text_prototypes(self) -> None:
-        """Cache text feature embeddings for EuroSAT classes."""
-        prompts = [PROMPT_TEMPLATE.format(name) for name in self.class_names]
+        """Cache text feature embeddings for the model's classes."""
         with torch.no_grad():
-            self.text_prototypes = self.get_text_features(prompts)
+            self.text_prototypes = self.get_text_features(self.build_prompts())
 
 
     def get_image_features(self, images: torch.Tensor) -> torch.Tensor:
@@ -203,37 +307,21 @@ class CLIPAdapterModel(BaseCLIPWrapper):
 
     def set_alpha(self, new_alpha: float) -> None:
         """Dynamically update the residual blending factor alpha."""
-        self.alpha = new_alpha
-        with torch.no_grad():
-            self.adapter.alpha.copy_(torch.tensor(new_alpha))
+        self.adapter.alpha = new_alpha
 
-    @torch.no_grad()
-    def predict(
-        self, images: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Predict class labels for evaluation compatibility with `engine.evaluate()`
-
-        Params:
-        images : torch.Tensor
-            Batch of images, shape (B, 3, 224, 224).
-
-        Return:
-        predictions : torch.Tensor
-            Predicted class indices (B,).
-        similarities : torch.Tensor
-            Cosine similarity matrix (B, num_classes).
-        """
-        image_features = self.get_image_features(images)
-
-        # Refresh text prototypes if needed
-        if not hasattr(self, "text_prototypes") or self.text_prototypes is None:
-            self._update_text_prototypes()
-
-        similarities = image_features @ self.text_prototypes.T
-        predictions = similarities.argmax(dim=-1)
-
-        return predictions, similarities
+    # predict() is deliberately NOT defined here.
+    #
+    # It used to be a verbatim copy of the base-class implementation, and
+    # the joint CoOp + CLIP-Adapter model ended up inheriting two rival
+    # copies of the same three lines.  BaseCLIPWrapper.predict() now does
+    # the job for every method whose scoring rule is "cosine similarity
+    # against the text prototypes" — which is this one.
+    #
+    # The one behavioural difference is that the base version recomputes
+    # the text prototypes on each call instead of reading the cache built
+    # in __init__.  That costs ten short prompts through the text tower and
+    # it is what makes the same method correct when the text side is also
+    # being trained.
 
 
 
@@ -252,15 +340,17 @@ class TipAdapterModel(BaseCLIPWrapper):
         alpha: float = 1.0,
         beta: float = 5.5,
         class_names: List[str] = EUROSAT_CLASS_NAMES,
+        prompt_template: str = PROMPT_TEMPLATE,
     ) -> None:
         super().__init__(
             model_name=model_name,
             pretrained=pretrained,
             device=device,
+            class_names=class_names,
+            prompt_template=prompt_template,
         )
         self.alpha = alpha
         self.beta = beta
-        self.class_names = class_names
 
         self.cache_keys = None   # F_train
         self.cache_values = None # L_train (one-hot)
@@ -268,10 +358,9 @@ class TipAdapterModel(BaseCLIPWrapper):
         self._update_text_prototypes()
 
     def _update_text_prototypes(self) -> None:
-        """Cache text feature embeddings for EuroSAT classes."""
-        prompts = [PROMPT_TEMPLATE.format(name) for name in self.class_names]
+        """Cache text feature embeddings for the model's classes."""
         with torch.no_grad():
-            self.text_prototypes = self.get_text_features(prompts)
+            self.text_prototypes = self.get_text_features(self.build_prompts())
 
     @torch.no_grad()
     def build_cache(self, dataloader, num_shots: int = 16) -> None:
@@ -407,15 +496,17 @@ class VisionLoRAModel(BaseCLIPWrapper):
         r: int = 4,
         lora_alpha: float = 1.0,
         class_names: List[str] = EUROSAT_CLASS_NAMES,
+        prompt_template: str = PROMPT_TEMPLATE,
     ) -> None:
         super().__init__(
             model_name=model_name,
             pretrained=pretrained,
             device=device,
+            class_names=class_names,
+            prompt_template=prompt_template,
         )
         self.r = r
         self.lora_alpha = lora_alpha
-        self.class_names = class_names
 
         # Inject LoRA into the vision transformer's MLP layers
         for block in self.model.visual.transformer.resblocks:
@@ -427,9 +518,8 @@ class VisionLoRAModel(BaseCLIPWrapper):
         self._update_text_prototypes()
 
     def _update_text_prototypes(self) -> None:
-        prompts = [PROMPT_TEMPLATE.format(name) for name in self.class_names]
         with torch.no_grad():
-            self.text_prototypes = self.get_text_features(prompts)
+            self.text_prototypes = self.get_text_features(self.build_prompts())
 
     def get_image_features(self, images: torch.Tensor) -> torch.Tensor:
         """Extract image features allowing gradients to flow through LoRA layers."""
@@ -439,12 +529,8 @@ class VisionLoRAModel(BaseCLIPWrapper):
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         return image_features
 
-    @torch.no_grad()
-    def predict(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        image_features = self.get_image_features(images)
-        similarities = image_features @ self.text_prototypes.T
-        predictions = similarities.argmax(dim=-1)
-        return predictions, similarities
+    # predict() inherited from BaseCLIPWrapper: same scoring rule, same
+    # three lines.  See the note in CLIPAdapterModel.
 
 
 # Test
@@ -467,6 +553,25 @@ if __name__ == "__main__":
 
     preds, sims = model.predict(dummy_images)
     print(f"Predictions shape: {preds.shape}, Similarities shape: {sims.shape}")
+    owner = next(k.__name__ for k in type(model).__mro__ if "predict" in k.__dict__)
+    print(f"predict() inherited from: {owner}")   # expected: BaseCLIPWrapper
+    print(f"alpha (fixed): {float(model.alpha):.4f} | set_alpha(0.5) -> ", end="")
+    model.set_alpha(0.5)
+    print(f"{float(model.alpha):.4f}")
+
+    # Same adapter, alpha now trained and constrained to (0, 1).
+    # Note the parameter count: +1 compared to the fixed-alpha variant.
+    learned = CLIPAdapterModel(device=device, reduction_ratio=4, alpha=0.2,
+                               learnable_alpha=True)
+    print(f"Learnable alpha: start {float(learned.alpha):.4f} | "
+          f"trainable {learned.count_trainable_params():,} "
+          f"(fixed-alpha variant: {model.count_trainable_params():,})")
+
+    # Different dataset: only the class names and the template change.
+    dtd = CLIPAdapterModel(device=device,
+                           class_names=["banded", "bubbly", "cracked"],
+                           prompt_template="a photo of a {} texture")
+    print(f"DTD prompts: {dtd.build_prompts()}")
 
     print(f"\nTesting TipAdapterModel on device: {device}")
     tip_model = TipAdapterModel(

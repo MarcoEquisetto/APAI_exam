@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import torch
 import torch.nn as nn
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 try:
     from src.base_model import BaseCLIPWrapper
@@ -217,9 +217,17 @@ class CoOpModel(BaseCLIPWrapper):
             model_name=model_name,
             pretrained=pretrained,
             device=device,
+            class_names=class_names,
+            # CoOp has no prompt template — replacing it is the whole point
+            # of the method.  The base class still stores one because
+            # ``build_prompts()`` is part of its interface, but nothing in
+            # this model ever reads the result: the context is a tensor and
+            # the class names live in the frozen suffix buffer.  Recording
+            # it as "{}" makes that explicit rather than leaving a stale
+            # EuroSAT template lying around on a model trained for DTD.
+            prompt_template="{}",
         )
 
-        self.class_names = list(class_names)
         self.n_ctx = n_ctx
         self.class_specific = class_specific
 
@@ -339,30 +347,18 @@ class CoOpModel(BaseCLIPWrapper):
     # ------------------------------------------------------------------
     # Evaluation hook expected by engine.evaluate()
     # ------------------------------------------------------------------
-    @torch.no_grad()
-    def predict(
-        self, images: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Classify a batch of images against the learned prototypes.
-
-        Text features are recomputed on every call rather than cached: the
-        context vectors change after every optimizer step, so a cache would
-        go stale mid-training (contract #4 in the project notes).  The cost
-        is ten prompts through the text tower — negligible next to the image
-        batch.
-
-        Returns
-        -------
-        predictions : torch.Tensor
-            ``(B,)`` predicted class indices.
-        similarities : torch.Tensor
-            ``(B, C)`` cosine similarities.
-        """
-        image_features = self.get_image_features(images)
-        text_features = self.get_text_features()
-        similarities = image_features @ text_features.T
-        return similarities.argmax(dim=-1), similarities
+    # There is no ``predict()`` here any more: ``BaseCLIPWrapper.predict()``
+    # already does exactly the right thing for this model.  It calls
+    # ``get_text_features()`` on every batch rather than reading a cache
+    # built in ``__init__``, which is precisely the behaviour CoOp needs —
+    # the context vectors change after every optimizer step, so a cached
+    # prototype would silently report the accuracy of the initial random
+    # context.  It passes ``build_prompts()`` as the argument; this class
+    # ignores the value and only checks that the class count still matches.
+    #
+    # Removing the override is also what makes the joint CoOp + adapter
+    # model possible: there is one ``predict()`` in the hierarchy now, not
+    # two rival copies of the same three lines.
 
 
 # ============================================================================

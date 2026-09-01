@@ -294,6 +294,7 @@ def train(
     train_loader: DataLoader,
     val_loader: Optional[DataLoader] = None,
     class_names: Optional[List[str]] = None,
+    prompt_template: Optional[str] = None,
     epochs: int = 20,
     lr: float = 2e-3,
     optimizer_type: str = "sgd",
@@ -342,6 +343,20 @@ def train(
     class_names : Optional[List[str]]
         Raw class names (e.g., ``["forest", "river", ...]``).  If None,
         defaults to ``EUROSAT_CLASS_NAMES``.
+    prompt_template : Optional[str]
+        Template applied to each class name, e.g.
+        ``"a satellite image of {}"``.  If None, falls back to the model's
+        own ``prompt_template`` attribute, and finally to the EuroSAT
+        default — so existing call sites are unaffected.
+
+        **Pass this whenever you train on something other than EuroSAT.**
+        Each dataset in ``dataset.py`` carries its own template
+        (``train_loader.dataset.prompt_template``): DTD wants
+        ``"a photo of a {} texture"`` and Flowers102 wants
+        ``"a photo of a {}, a type of flower"``.  Using the EuroSAT
+        template on DTD builds the prompt "a satellite image of banded",
+        which is meaningless — the run does not crash, it just quietly
+        loses accuracy.
     epochs : int
         Number of training epochs.
     lr : float
@@ -377,6 +392,7 @@ def train(
         - ``"val_top5"``:   list of per-epoch validation Top-5 accuracy (%)
         - ``"lr"``:         list of per-epoch learning rates
         - ``"best_val_top1"``: best validation Top-1 accuracy
+        - ``"gpu_mb"``:      list of per-epoch GPU memory (MB)
         - ``"peak_gpu_mb"``:   peak GPU memory during training
     """
     try:
@@ -384,11 +400,21 @@ def train(
     except ModuleNotFoundError:
         from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
 
+    # ----------------------------------------------------------------
+    # Resolve the class set and the prompt template.
+    #
+    # Precedence: explicit argument → whatever the model was built with →
+    # EuroSAT default.  The middle step matters: a model constructed for
+    # DTD already knows its own class names and template, and forcing the
+    # caller to repeat them here is exactly how the two drift apart.
+    # ----------------------------------------------------------------
     if class_names is None:
-        class_names = EUROSAT_CLASS_NAMES
+        class_names = getattr(model, "class_names", None) or EUROSAT_CLASS_NAMES
+    if prompt_template is None:
+        prompt_template = getattr(model, "prompt_template", None) or PROMPT_TEMPLATE
 
     # Build full text prompts from raw class names.
-    prompts = [PROMPT_TEMPLATE.format(name) for name in class_names]
+    prompts = [prompt_template.format(name) for name in class_names]
 
     # ----------------------------------------------------------------
     # Collect trainable parameters.  Only these will receive gradients.
@@ -489,14 +515,36 @@ def train(
         "val_top1": [],
         "val_top5": [],
         "lr": [],
+        # Per-epoch GPU memory.  The brief asks for a "Memory Usage vs.
+        # Epochs" plot, and a single end-of-run scalar cannot draw a curve.
+        # Two series are recorded because they answer different questions:
+        #   • gpu_mb      — running peak since the start of training,
+        #                   monotonically non-decreasing.  This is the
+        #                   number that tells you whether the run fits in
+        #                   5 GB of VRAM.
+        #   • gpu_epoch_mb — peak *within* that epoch alone, obtained by
+        #                   resetting the CUDA counter at the top of every
+        #                   epoch.  This is the one that shows a method's
+        #                   steady-state cost and makes methods comparable.
+        "gpu_mb": [],
+        "gpu_epoch_mb": [],
     }
     best_val_acc = 0.0
+    running_peak_mb = 0.0
     start_time = time.time()
 
     for epoch in range(epochs):
         epoch_loss = 0.0
         epoch_correct = 0
         epoch_total = 0
+
+        # Reset the CUDA peak counter so that ``max_memory_allocated()``
+        # measures this epoch alone.  The peak over the whole run is kept
+        # separately in ``running_peak_mb``: resetting the counter is what
+        # makes the per-epoch series meaningful, but it would otherwise
+        # throw away the global peak the brief also asks for.
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
 
         for batch_idx, (images, labels, _class_texts) in enumerate(train_loader):
             images = images.to(model.device)
@@ -543,6 +591,14 @@ def train(
         history["train_loss"].append(avg_loss)
         history["train_acc"].append(train_acc)
         history["lr"].append(current_lr)
+
+        # Memory for this epoch, recorded *before* validation so the number
+        # reflects the training step (forward + backward + optimizer state)
+        # and is not contaminated by the validation batch size.
+        epoch_peak_mb = _get_gpu_memory_mb()["gpu/max_allocated_mb"]
+        running_peak_mb = max(running_peak_mb, epoch_peak_mb)
+        history["gpu_epoch_mb"].append(epoch_peak_mb)
+        history["gpu_mb"].append(running_peak_mb)
 
         # Step the scheduler after each epoch.
         if scheduler is not None:
@@ -625,7 +681,12 @@ def train(
     gpu_memory = _get_gpu_memory_mb()
 
     history["best_val_top1"] = best_val_acc
-    history["peak_gpu_mb"] = gpu_memory.get("gpu/max_allocated_mb", 0.0)
+    # NOT ``gpu_memory["gpu/max_allocated_mb"]``: the counter is reset at the
+    # top of every epoch, so reading it here would report the *last* epoch's
+    # peak rather than the run's.  ``running_peak_mb`` is the true maximum.
+    history["peak_gpu_mb"] = max(
+        running_peak_mb, gpu_memory.get("gpu/max_allocated_mb", 0.0)
+    )
     history["total_time_seconds"] = total_time
 
     val_info = f" | Best Val: {best_val_acc:.2f}%" if val_loader is not None else ""
@@ -651,13 +712,27 @@ def run_all_evaluations(
     test_loader: DataLoader,
     device: str = "cuda",
     use_wandb: bool = True,
+    extra_models: Optional[Dict[str, Any]] = None,
+    clip_wrapper: Optional[Any] = None,
+    include_baselines: bool = True,
+    train_loader: Optional[DataLoader] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Evaluate all available models and return a results dictionary.
+    Evaluate the baselines — and any adapted models handed in — in one pass.
 
-    This is a convenience function that instantiates ZeroShot, LinearProbe,
-    and OptimalTransport models, runs evaluation on each, and collects the
-    results.
+    The baselines (Zero-Shot, Zero-Shot Ensemble, Linear Probe, Optimal
+    Transport) are parameter-free or cheap to fit, so this function builds
+    them itself.  The three workstreams' methods (CoOp, CLIP-Adapter,
+    Tip-Adapter, LoRA) must be **trained first** and passed in through
+    ``extra_models``: re-training them inside a function called
+    "run_all_evaluations" would be a surprising amount of work to trigger
+    by accident, and the training hyperparameters belong to whoever owns
+    the method.
+
+    Without ``extra_models`` the comparative figures show only the
+    baselines — two of which sit at zero trainable parameters — and the
+    "Accuracy vs. Trainable Parameters" trade-off that the project is
+    actually about does not appear at all.
 
     Parameters
     ----------
@@ -667,6 +742,37 @@ def run_all_evaluations(
         "cuda" or "cpu".
     use_wandb : bool
         Whether to log to W&B.
+    extra_models : Optional[Dict[str, Any]]
+        Already-trained models to evaluate alongside the baselines, keyed
+        by the name to show in the plots, e.g.::
+
+            coop = CoOpModel(device=device)
+            train(coop, few_shot_loader, epochs=100, lr=2e-3)
+
+            adapter = CLIPAdapterModel(device=device, reduction_ratio=4)
+            train(adapter, few_shot_loader, epochs=20, lr=1e-3,
+                  optimizer_type="adamw")
+
+            results = run_all_evaluations(
+                test_loader, device=device,
+                extra_models={"CoOp (M=16, 16-shot)": coop,
+                              "CLIP-Adapter (r=4)": adapter},
+            )
+
+        Each value only has to expose ``predict(images) -> (preds, scores)``,
+        which every subclass of ``BaseCLIPWrapper`` inherits.
+    clip_wrapper : Optional[Any]
+        Reuse an existing frozen backbone instead of loading a second copy.
+        On a 5 GB card this is the difference between fitting and not.
+    include_baselines : bool
+        Set to ``False`` to evaluate only ``extra_models`` — useful when
+        the baseline numbers are already on disk and only a new method
+        needs re-measuring.
+    train_loader : Optional[DataLoader]
+        Training data for the Linear Probe.  If None, a full-shot EuroSAT
+        loader is built.  **Pass a few-shot loader here** if the comparison
+        is meant to be at matched supervision: a Linear Probe fitted on
+        21,600 images is not comparable with CoOp fitted on 160.
 
     Returns
     -------
@@ -684,38 +790,57 @@ def run_all_evaluations(
         from optimal_transport import OptimalTransportCLIP
         from dataset import get_dataloaders
 
-    # Shared frozen CLIP backbone.
-    clip_wrapper = BaseCLIPWrapper(device=device)
+    all_results: Dict[str, Dict[str, Any]] = {}
 
-    all_results = {}
+    if include_baselines:
+        # Shared frozen CLIP backbone — one copy for all four baselines.
+        if clip_wrapper is None:
+            clip_wrapper = BaseCLIPWrapper(device=device)
 
+        zs_model = ZeroShotCLIP(clip_wrapper)
+        all_results["ZeroShot"] = evaluate(
+            zs_model, test_loader, model_name="ZeroShot", use_wandb=use_wandb,
+        )
 
-    zs_model = ZeroShotCLIP(clip_wrapper)
-    all_results["ZeroShot"] = evaluate(
-        zs_model, test_loader, model_name="ZeroShot", use_wandb=use_wandb,
-    )
+        zs_ensemble = ZeroShotEnsembleCLIP(clip_wrapper)
+        all_results["ZeroShot-Ensemble"] = evaluate(
+            zs_ensemble, test_loader, model_name="ZeroShot-Ensemble",
+            use_wandb=use_wandb,
+        )
 
+        if train_loader is None:
+            train_loader, _ = get_dataloaders(batch_size=256, num_workers=4)
+        lp_model = LinearProbeCLIP(clip_wrapper)
+        lp_model.fit(train_loader)
+        all_results["LinearProbe"] = evaluate(
+            lp_model, test_loader, model_name="LinearProbe", use_wandb=use_wandb,
+        )
 
-    zs_ensemble = ZeroShotEnsembleCLIP(clip_wrapper)
-    all_results["ZeroShot-Ensemble"] = evaluate(
-        zs_ensemble, test_loader, model_name="ZeroShot-Ensemble", use_wandb=use_wandb,
-    )
+        ot_model = OptimalTransportCLIP(clip_wrapper)
+        all_results["OptimalTransport"] = evaluate(
+            ot_model, test_loader, model_name="OptimalTransport",
+            use_wandb=use_wandb,
+        )
 
-
-    train_loader, _ = get_dataloaders(batch_size=256, num_workers=4)
-    lp_model = LinearProbeCLIP(clip_wrapper)
-    lp_model.fit(train_loader)
-    all_results["LinearProbe"] = evaluate(
-        lp_model, test_loader, model_name="LinearProbe", use_wandb=use_wandb,
-    )
-
-
-    ot_model = OptimalTransportCLIP(clip_wrapper)
-    all_results["OptimalTransport"] = evaluate(
-        ot_model, test_loader, model_name="OptimalTransport", use_wandb=use_wandb,
-    )
-
-
+    # ----------------------------------------------------------------
+    # The three workstreams' methods.  Already trained by their owner —
+    # this loop only measures them, through the very same evaluate() the
+    # baselines went through, so the numbers are directly comparable.
+    # ----------------------------------------------------------------
+    for name, model in (extra_models or {}).items():
+        if not hasattr(model, "predict"):
+            raise TypeError(
+                f"extra_models['{name}'] has no .predict(images) method; "
+                "evaluate() cannot score it.  Every BaseCLIPWrapper "
+                "subclass inherits one."
+            )
+        # Adapter modules must not be left in train mode: dropout and the
+        # like would make the reported accuracy noisy and irreproducible.
+        if hasattr(model, "eval"):
+            model.eval()
+        all_results[name] = evaluate(
+            model, test_loader, model_name=name, use_wandb=use_wandb,
+        )
 
     return all_results
 
@@ -937,6 +1062,93 @@ def plot_comparative_results(
 # ============================================================================
 # Confusion Matrices
 # ============================================================================
+
+def plot_memory_vs_epochs(
+    histories: Dict[str, Dict[str, Any]],
+    save_dir: str = "./plots",
+    per_epoch: bool = True,
+) -> None:
+    """
+    Plot GPU memory usage against training epochs — a brief deliverable.
+
+    The project treats resource cost as a first-class metric, not an
+    afterthought, and this is the figure that shows it over time rather
+    than as a single bar.
+
+    Parameters
+    ----------
+    histories : Dict[str, Dict[str, Any]]
+        Mapping from a method's name to the ``history`` dict returned by
+        ``train()``.  Any entry without a memory series is skipped with a
+        warning rather than crashing the whole figure.
+    save_dir : str
+        Output directory.  Same fallback logic as the other plots.
+    per_epoch : bool
+        ``True``  → plot ``history["gpu_epoch_mb"]``, the peak *within*
+        each epoch.  This is the fair comparison between methods: it shows
+        steady-state cost and it is flat for a well-behaved training loop.
+
+        ``False`` → plot ``history["gpu_mb"]``, the running peak since the
+        start.  Monotonically non-decreasing by construction, so the curve
+        is a staircase; useful to answer "does this run fit in 5 GB?".
+
+    Notes
+    -----
+    The two series are genuinely different measurements and mixing them up
+    produces a plot that looks like a memory leak when nothing is leaking.
+    The axis label states which one is being drawn.
+    """
+    if save_dir == "./plots" and not os.path.exists("./plots"):
+        save_dir = str(PROJECT_ROOT / "plots")
+    os.makedirs(save_dir, exist_ok=True)
+
+    key = "gpu_epoch_mb" if per_epoch else "gpu_mb"
+    plt.style.use("seaborn-v0_8-darkgrid")
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    plotted = 0
+
+    for idx, (name, hist) in enumerate(histories.items()):
+        series = hist.get(key)
+        if not series:
+            print(
+                f"[Plot] Warning: '{name}' has no '{key}' series "
+                f"(trained before per-epoch memory logging existed?) — skipped."
+            )
+            continue
+        epochs_axis = range(1, len(series) + 1)
+        ax.plot(
+            epochs_axis, series,
+            marker="o", markersize=3, linewidth=1.8,
+            label=f"{name} (peak {max(series):.0f} MB)",
+            color=f"C{idx % 10}",
+        )
+        plotted += 1
+
+    if plotted == 0:
+        plt.close(fig)
+        print("[Plot] No memory series available — 'memory_vs_epochs' not written.")
+        return
+
+    ylabel = (
+        "Peak GPU memory within epoch (MB)" if per_epoch
+        else "Peak GPU memory since start (MB)"
+    )
+    ax.set_xlabel("Epoch", fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(
+        "Memory Usage vs. Epochs", fontsize=14, fontweight="bold", pad=15,
+    )
+    ax.legend(fontsize=9)
+    ax.grid(alpha=0.3)
+    ax.set_ylim(bottom=0)
+
+    fig.tight_layout()
+    out = os.path.join(save_dir, "memory_vs_epochs.png")
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[Plot] Saved: {out}")
+
 
 def plot_confusion_matrices(
     all_results: Dict[str, Dict[str, Any]],
@@ -1173,6 +1385,35 @@ if __name__ == "__main__":
         batch_size=64, num_workers=4, download=True
     )
 
+    # Baselines only.  To put CoOp / CLIP-Adapter / Tip-Adapter / LoRA on
+    # the same figures, train them first and hand them over:
+    #
+    #     from src.coop import CoOpModel
+    #     from src.clip_adapter import CLIPAdapterModel
+    #     from src.few_shot import build_few_shot_loader
+    #
+    #     support = build_few_shot_loader(train_loader.dataset, n_shots=16)
+    #
+    #     coop = CoOpModel(device=device)
+    #     h_coop = train(coop, support, epochs=100, lr=2e-3, use_wandb=False,
+    #                    model_name="CoOp")
+    #
+    #     adapter = CLIPAdapterModel(device=device, reduction_ratio=4)
+    #     h_adapter = train(adapter, support, epochs=20, lr=1e-3,
+    #                       optimizer_type="adamw", use_wandb=False,
+    #                       model_name="CLIP-Adapter")
+    #
+    #     results = run_all_evaluations(
+    #         test_loader, device=device, use_wandb=False,
+    #         train_loader=support,          # matched supervision, see below
+    #         extra_models={"CoOp (M=16)": coop, "CLIP-Adapter (r=4)": adapter},
+    #     )
+    #     plot_memory_vs_epochs({"CoOp": h_coop, "CLIP-Adapter": h_adapter})
+    #
+    # Note the ``train_loader=support``: fitting the Linear Probe on all
+    # 21,600 images and CoOp on 160 puts two different experiments on one
+    # axis.  Whatever protocol is chosen, it has to be the same for every
+    # bar in the figure.
     results = run_all_evaluations(
         test_loader, device=device, use_wandb=False
     )
