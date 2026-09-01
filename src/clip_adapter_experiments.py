@@ -1,5 +1,5 @@
 
-# Use: python clip_adapter_experiments.py --epochs 10 --batch_size 64 --lr 1e-3
+# Use: python clip_adapter_experiments.py --epochs 10 --batch_size 64 --lr 1e-3 --no_wandb
 
 import os
 import json
@@ -7,6 +7,17 @@ import argparse
 import torch
 import matplotlib.pyplot as plt
 import matplotlib
+
+import sys
+from pathlib import Path
+
+# Add project root and src directory to sys.path
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parent
+if str(FILE_DIR) not in sys.path:
+    sys.path.insert(0, str(FILE_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.base_model import BaseCLIPWrapper
 from src.dataset import get_dataloaders
@@ -73,7 +84,7 @@ def run_single_experiment(
     return model, metrics
 
 
-def plot_marco_sweeps(sweep_results: list, save_dir: str = "./plots"):
+def plot_marco_sweeps(sweep_results: list, alpha_sweep_results: list = None, save_dir: str = "./plots"):
     """Generate comparative visualization plots for Marco's experiments."""
     os.makedirs(save_dir, exist_ok=True)
     plt.style.use("seaborn-v0_8-darkgrid")
@@ -101,6 +112,23 @@ def plot_marco_sweeps(sweep_results: list, save_dir: str = "./plots"):
     plt.savefig(os.path.join(save_dir, "clip_adapter_reduction_sweep.png"), dpi=150)
     plt.close()
     print(f"[Plot] Saved: {save_dir}/clip_adapter_reduction_sweep.png")
+
+    # Plot 2: Accuracy vs Residual Alpha
+    if alpha_sweep_results:
+        alphas = [res["alpha"] for res in alpha_sweep_results]
+        alpha_accs = [res["top1_accuracy"] for res in alpha_sweep_results]
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.set_xlabel("Residual Blending Alpha")
+        ax.set_ylabel("Top-1 Accuracy (%)", color="tab:blue")
+        ax.plot(alphas, alpha_accs, marker="o", linewidth=2, color="tab:blue", label="Top-1 Acc")
+        ax.tick_params(axis="y", labelcolor="tab:blue")
+
+        plt.title("CLIP-Adapter: Impact of Residual Blending Alpha on Accuracy")
+        fig.tight_layout()
+        plt.savefig(os.path.join(save_dir, "clip_adapter_alpha_sweep.png"), dpi=150)
+        plt.close()
+        print(f"[Plot] Saved: {save_dir}/clip_adapter_alpha_sweep.png")
 
 
 if __name__ == "__main__":
@@ -135,6 +163,26 @@ if __name__ == "__main__":
     with open("./plots/clip_adapter_results.json", "w") as f:
         json.dump(results, f, indent=4)
 
+    # Run alpha sweep
+    print("\n--- Starting Alpha Sweep ---")
+    alphas_to_test = [0.1, 0.2, 0.5, 0.8]
+    alpha_results = []
+
+    for a in alphas_to_test:
+        _, metrics = run_single_experiment(
+            reduction_ratio=4,  # default recommended
+            alpha=a,
+            epochs=args.epochs,
+            lr=args.lr,
+            batch_size=args.batch_size,
+            device=device,
+            use_wandb=not args.no_wandb,
+        )
+        alpha_results.append(metrics)
+
+    with open("./plots/clip_adapter_alpha_results.json", "w") as f:
+        json.dump(alpha_results, f, indent=4)
+
     # Plot results
-    plot_marco_sweeps(results)
+    plot_marco_sweeps(results, alpha_sweep_results=alpha_results)
     print("\nCLIP-Adapter hyperparameter exploration complete!")
