@@ -58,7 +58,7 @@ except ModuleNotFoundError:
     from few_shot import build_few_shot_loader
 
 
-RESULTS_DIR = PROJECT_ROOT / "src/plots"
+RESULTS_DIR = PROJECT_ROOT / "plots"
 RESULTS_JSON = RESULTS_DIR / "coop_results.json"
 
 
