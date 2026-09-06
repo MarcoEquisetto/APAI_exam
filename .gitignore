@@ -14,6 +14,5 @@ env/
 # Weights & Biases
 wandb/
 
-# Project-specific data and generated plots
-data/eurosat/
-
+data/
+APAI_exam/

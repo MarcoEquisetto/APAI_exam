@@ -80,6 +80,7 @@ class ZeroShotCLIP:
         self,
         clip_wrapper: BaseCLIPWrapper,
         class_names: List[str] = EUROSAT_CLASS_NAMES,
+        prompt_template: str = PROMPT_TEMPLATE,
     ) -> None:
         self.clip_wrapper = clip_wrapper
 
@@ -89,7 +90,7 @@ class ZeroShotCLIP:
         # to each class name, then encode all prompts in a single forward
         # pass through the text encoder.
         # ----------------------------------------------------------------
-        prompts = [PROMPT_TEMPLATE.format(name) for name in class_names]
+        prompts = [prompt_template.format(name) for name in class_names]
         # text_prototypes shape: (num_classes, D)
         self.text_prototypes = clip_wrapper.get_text_features(prompts)
 

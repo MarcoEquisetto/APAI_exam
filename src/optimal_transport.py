@@ -91,6 +91,7 @@ class OptimalTransportCLIP:
         self,
         clip_wrapper: BaseCLIPWrapper,
         class_names: List[str] = EUROSAT_CLASS_NAMES,
+        prompt_template: str = PROMPT_TEMPLATE,
         sinkhorn_reg: float = 0.05,
         sinkhorn_max_iter: int = 100,
     ) -> None:
@@ -104,7 +105,7 @@ class OptimalTransportCLIP:
         # We cache these because the class set is fixed; recomputing
         # them for every image would be wasteful.
         # ----------------------------------------------------------------
-        prompts = [PROMPT_TEMPLATE.format(name) for name in class_names]
+        prompts = [prompt_template.format(name) for name in class_names]
         # text_token_features is a list of tensors, one per class.
         # Each tensor has shape (T_c, D) where T_c is the number of
         # non-padding tokens for class c.
