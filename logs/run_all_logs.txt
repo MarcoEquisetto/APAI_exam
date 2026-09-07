@@ -1,0 +1,313 @@
+(APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src$ python run_all.py
+[run_all] Device: cuda
+
+######################################################################
+#  DATASET: EuroSAT
+######################################################################
+  Classes: 10  |  Train: 21600  |  Test: 5400
+
+--- Baselines (EuroSAT) ---
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 43.6s
+  ✓ ZeroShot (43.9s)
+[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 35.6s
+  ✓ ZeroShot-Ensemble (35.7s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.8s finished
+[LinearProbe] Top-1: 93.81% | Top-5: 99.98% | Params: 5,130 | 34.1s
+  ✓ LinearProbe (193.2s)
+[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 64.3s
+  ✓ OptimalTransport (64.3s)
+
+--- Trainable methods (EuroSAT) ---
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+^CTraceback (most recent call last):
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 1024, in <module>
+    main()
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 988, in main
+    ds_results, ds_tsne = run_dataset(
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 881, in run_dataset
+    results["CoOp"] = run_coop(
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 263, in run_coop
+    history = engine.train(
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/engine.py", line 549, in train
+    for batch_idx, (images, labels, _class_texts) in enumerate(train_loader):
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 701, in __next__
+    data = self._next_data()
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 757, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 52, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 52, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/dataset.py", line 211, in __getitem__
+    image, label = self.subset[idx]
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataset.py", line 412, in __getitem__
+    return self.dataset[self.indices[idx]]
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 245, in __getitem__
+    sample = self.loader(path)
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 284, in default_loader
+    return pil_loader(path)
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 264, in pil_loader
+    return img.convert("RGB")
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/Image.py", line 1069, in convert
+    self.load()
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/ImageFile.py", line 392, in load
+    s = read(read_bytes)
+  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/JpegImagePlugin.py", line 418, in load_read
+    s = self.fp.read(read_bytes)
+KeyboardInterrupt
+
+(APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src$ cp -r /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam ~/APAI_exam
+cd ~/APAI_exam/src
+(APAI) marco@Marco:~/APAI_exam/src$ python run_all.py
+[run_all] Device: cuda
+
+######################################################################
+#  DATASET: EuroSAT
+######################################################################
+  Classes: 10  |  Train: 21600  |  Test: 5400
+
+--- Baselines (EuroSAT) ---
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 8.8s
+  ✓ ZeroShot (9.0s)
+[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 11.0s
+  ✓ ZeroShot-Ensemble (11.1s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.8s finished
+[LinearProbe] Top-1: 93.81% | Top-5: 99.98% | Params: 5,130 | 8.6s
+  ✓ LinearProbe (53.2s)
+[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 34.6s
+  ✓ OptimalTransport (34.6s)
+
+--- Trainable methods (EuroSAT) ---
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+  Epoch 1/10 | Loss: 0.8311 | Acc: 70.33% | Val Top-1: 83.15%
+  Epoch 2/10 | Loss: 0.3546 | Acc: 88.62% | Val Top-1: 91.81%
+  Epoch 3/10 | Loss: 0.2149 | Acc: 93.04% | Val Top-1: 93.52%
+  Epoch 4/10 | Loss: 0.1816 | Acc: 94.20% | Val Top-1: 94.46%
+  Epoch 5/10 | Loss: 0.1663 | Acc: 94.62% | Val Top-1: 94.67%
+  Epoch 6/10 | Loss: 0.1543 | Acc: 95.08% | Val Top-1: 94.61%
+  Epoch 7/10 | Loss: 0.1441 | Acc: 95.35% | Val Top-1: 94.76%
+  Epoch 8/10 | Loss: 0.1343 | Acc: 95.71% | Val Top-1: 95.33%
+  Epoch 9/10 | Loss: 0.1282 | Acc: 95.88% | Val Top-1: 95.39%
+  Epoch 10/10 | Loss: 0.1234 | Acc: 95.98% | Val Top-1: 95.37%
+[CoOp] Done in 636.8s | Final Loss: 0.1234 | Best Val: 95.39%
+[CoOp] Top-1: 95.37% | Top-5: 100.00% | Params: 8,192 | 12.4s
+  ✓ CoOp (652.1s)
+[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
+  Epoch 1/5 | Loss: 1.3216 | Acc: 50.90% | Val Top-1: 57.98%
+  Epoch 2/5 | Loss: 0.2250 | Acc: 92.46% | Val Top-1: 95.24%
+  Epoch 3/5 | Loss: 0.1237 | Acc: 95.81% | Val Top-1: 95.89%
+  Epoch 4/5 | Loss: 0.0953 | Acc: 96.75% | Val Top-1: 96.44%
+  Epoch 5/5 | Loss: 0.0785 | Acc: 97.35% | Val Top-1: 96.59%
+[CLIP-Adapter] Done in 300.2s | Final Loss: 0.0785 | Best Val: 96.59%
+[CLIP-Adapter] Top-1: 96.59% | Top-5: 100.00% | Params: 131,712 | 10.5s
+  ✓ CLIP-Adapter (312.2s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
+  Epoch 1/10 | Loss: 0.9789 | Acc: 64.30% | Val Top-1: 77.26%
+  Epoch 2/10 | Loss: 0.3660 | Acc: 87.87% | Val Top-1: 91.72%
+  Epoch 3/10 | Loss: 0.2053 | Acc: 93.29% | Val Top-1: 93.54%
+  Epoch 4/10 | Loss: 0.1778 | Acc: 94.18% | Val Top-1: 94.15%
+  Epoch 5/10 | Loss: 0.1635 | Acc: 94.78% | Val Top-1: 94.63%
+  Epoch 6/10 | Loss: 0.1493 | Acc: 95.13% | Val Top-1: 94.89%
+  Epoch 7/10 | Loss: 0.1402 | Acc: 95.57% | Val Top-1: 95.02%
+  Epoch 8/10 | Loss: 0.1317 | Acc: 95.71% | Val Top-1: 95.15%
+  Epoch 9/10 | Loss: 0.1252 | Acc: 96.06% | Val Top-1: 95.33%
+  Epoch 10/10 | Loss: 0.1215 | Acc: 96.23% | Val Top-1: 95.44%
+[CoOp+Adapter] Done in 755.5s | Final Loss: 0.1215 | Best Val: 95.44%
+[CoOp+Adapter] Top-1: 95.44% | Top-5: 100.00% | Params: 139,904 | 14.7s
+  ✓ CoOp+Adapter (771.4s)
+Tip-Adapter cache built: keys torch.Size([21600, 512]), values torch.Size([21600, 10])
+[Tip-Adapter] Top-1: 76.13% | Top-5: 98.56% | Params: 0 | 11.1s
+[Tip-Adapter-F] Top-1: 96.56% | Top-5: 100.00% | Params: 11,059,200 | 11.5s
+  ✓ Tip-Adapter + Tip-Adapter-F (1108.6s)
+[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
+  Epoch 1/5 | Loss: 1.3101 | Acc: 51.82% | Val Top-1: 57.81%
+  Epoch 2/5 | Loss: 0.2185 | Acc: 93.42% | Val Top-1: 97.22%
+  Epoch 3/5 | Loss: 0.0667 | Acc: 97.77% | Val Top-1: 97.85%
+  Epoch 4/5 | Loss: 0.0427 | Acc: 98.58% | Val Top-1: 98.20%
+  Epoch 5/5 | Loss: 0.0309 | Acc: 99.09% | Val Top-1: 98.17%
+[LoRA] Done in 650.0s | Final Loss: 0.0309 | Best Val: 98.20%
+[LoRA] Top-1: 98.17% | Top-5: 100.00% | Params: 368,640 | 16.0s
+  ✓ LoRA (667.4s)
+
+######################################################################
+#  DATASET: DTD
+######################################################################
+Downloading https://thor.robots.ox.ac.uk/dtd/dtd-r1.0.1.tar.gz to /home/marco/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz
+100%|████████████████████████████████████████████████████████████████████████████████| 625M/625M [44:07<00:00, 236kB/s]
+Extracting /home/marco/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz to /home/marco/APAI_exam/data/dtd
+  Classes: 47  |  Train: 1880  |  Test: 1880
+
+--- Baselines (DTD) ---
+[ZeroShot] Top-1: 54.89% | Top-5: 86.44% | Params: 0 | 5.6s
+  ✓ ZeroShot (5.6s)
+[ZeroShot-Ensemble] Top-1: 57.34% | Top-5: 87.93% | Params: 0 | 7.8s
+  ✓ ZeroShot-Ensemble (8.5s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.1s finished
+[LinearProbe] Top-1: 70.90% | Top-5: 93.03% | Params: 24,111 | 7.9s
+  ✓ LinearProbe (16.9s)
+[OptimalTransport] Top-1: 23.30% | Top-5: 42.07% | Params: 0 | 44.1s
+  ✓ OptimalTransport (44.2s)
+
+--- Trainable methods (DTD) ---
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+  Epoch 1/10 | Loss: 2.5837 | Acc: 34.47% | Val Top-1: 44.84%
+  Epoch 2/10 | Loss: 1.5132 | Acc: 56.81% | Val Top-1: 62.34%
+  Epoch 3/10 | Loss: 1.2046 | Acc: 62.66% | Val Top-1: 66.06%
+  Epoch 4/10 | Loss: 1.0416 | Acc: 67.77% | Val Top-1: 68.24%
+  Epoch 5/10 | Loss: 0.9258 | Acc: 71.01% | Val Top-1: 69.57%
+  Epoch 6/10 | Loss: 0.8303 | Acc: 73.72% | Val Top-1: 72.50%
+  Epoch 7/10 | Loss: 0.7710 | Acc: 75.96% | Val Top-1: 72.18%
+  Epoch 8/10 | Loss: 0.7186 | Acc: 76.81% | Val Top-1: 72.87%
+  Epoch 9/10 | Loss: 0.6843 | Acc: 78.03% | Val Top-1: 72.71%
+  Epoch 10/10 | Loss: 0.6572 | Acc: 79.52% | Val Top-1: 73.46%
+[CoOp] Done in 197.0s | Final Loss: 0.6572 | Best Val: 73.46%
+[CoOp] Top-1: 73.46% | Top-5: 95.43% | Params: 8,192 | 9.6s
+  ✓ CoOp (208.0s)
+[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
+  Epoch 1/5 | Loss: 1.5848 | Acc: 53.19% | Val Top-1: 54.84%
+  Epoch 2/5 | Loss: 1.3227 | Acc: 60.96% | Val Top-1: 67.98%
+  Epoch 3/5 | Loss: 0.9167 | Acc: 72.13% | Val Top-1: 73.03%
+  Epoch 4/5 | Loss: 0.6969 | Acc: 79.10% | Val Top-1: 74.52%
+  Epoch 5/5 | Loss: 0.5984 | Acc: 82.93% | Val Top-1: 75.21%
+[CLIP-Adapter] Done in 90.0s | Final Loss: 0.5984 | Best Val: 75.21%
+[CLIP-Adapter] Top-1: 75.21% | Top-5: 95.53% | Params: 131,712 | 9.3s
+  ✓ CLIP-Adapter (100.6s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
+  Epoch 1/10 | Loss: 2.6014 | Acc: 35.53% | Val Top-1: 41.65%
+  Epoch 2/10 | Loss: 1.6997 | Acc: 52.50% | Val Top-1: 62.82%
+  Epoch 3/10 | Loss: 1.1543 | Acc: 64.63% | Val Top-1: 68.78%
+  Epoch 4/10 | Loss: 0.9413 | Acc: 70.80% | Val Top-1: 70.90%
+  Epoch 5/10 | Loss: 0.8296 | Acc: 73.24% | Val Top-1: 72.71%
+  Epoch 6/10 | Loss: 0.7597 | Acc: 75.53% | Val Top-1: 73.56%
+  Epoch 7/10 | Loss: 0.7068 | Acc: 78.35% | Val Top-1: 73.67%
+  Epoch 8/10 | Loss: 0.6654 | Acc: 79.15% | Val Top-1: 74.63%
+  Epoch 9/10 | Loss: 0.6302 | Acc: 80.27% | Val Top-1: 74.26%
+  Epoch 10/10 | Loss: 0.6105 | Acc: 81.12% | Val Top-1: 74.31%
+[CoOp+Adapter] Done in 194.4s | Final Loss: 0.6105 | Best Val: 74.63%
+[CoOp+Adapter] Top-1: 74.31% | Top-5: 95.64% | Params: 139,904 | 9.4s
+  ✓ CoOp+Adapter (205.0s)
+Tip-Adapter cache built: keys torch.Size([1880, 512]), values torch.Size([1880, 47])
+[Tip-Adapter] Top-1: 68.03% | Top-5: 92.34% | Params: 0 | 8.0s
+[Tip-Adapter-F] Top-1: 78.24% | Top-5: 96.44% | Params: 962,560 | 8.0s
+  ✓ Tip-Adapter + Tip-Adapter-F (183.7s)
+[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
+  Epoch 1/5 | Loss: 1.5873 | Acc: 53.24% | Val Top-1: 54.89%
+  Epoch 2/5 | Loss: 1.4458 | Acc: 56.81% | Val Top-1: 61.17%
+  Epoch 3/5 | Loss: 1.1784 | Acc: 64.57% | Val Top-1: 63.56%
+  Epoch 4/5 | Loss: 1.0225 | Acc: 69.73% | Val Top-1: 65.64%
+  Epoch 5/5 | Loss: 0.9441 | Acc: 71.97% | Val Top-1: 65.90%
+[LoRA] Done in 103.0s | Final Loss: 0.9441 | Best Val: 65.90%
+[LoRA] Top-1: 65.90% | Top-5: 92.13% | Params: 368,640 | 9.4s
+  ✓ LoRA (113.7s)
+
+######################################################################
+#  DATASET: Flowers102
+######################################################################
+Downloading https://thor.robots.ox.ac.uk/flowers/102/102flowers.tgz to /home/marco/APAI_exam/data/flowers-102/102flowers.tgz
+100%|████████████████████████████████████████████████████████████████████████████████| 345M/345M [17:16<00:00, 333kB/s]
+Extracting /home/marco/APAI_exam/data/flowers-102/102flowers.tgz to /home/marco/APAI_exam/data/flowers-102
+Downloading https://thor.robots.ox.ac.uk/flowers/102/imagelabels.mat to /home/marco/APAI_exam/data/flowers-102/imagelabels.mat
+100%|██████████████████████████████████████████████████████████████████████████████████| 502/502 [00:00<00:00, 381kB/s]
+Downloading https://thor.robots.ox.ac.uk/flowers/102/setid.mat to /home/marco/APAI_exam/data/flowers-102/setid.mat
+100%|█████████████████████████████████████████████████████████████████████████████| 15.0k/15.0k [00:00<00:00, 22.4MB/s]
+  Classes: 102  |  Train: 1020  |  Test: 6149
+
+--- Baselines (Flowers102) ---
+[ZeroShot] Top-1: 71.46% | Top-5: 87.36% | Params: 0 | 26.5s
+  ✓ ZeroShot (26.5s)
+[ZeroShot-Ensemble] Top-1: 71.93% | Top-5: 86.91% | Params: 0 | 24.6s
+  ✓ ZeroShot-Ensemble (26.2s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.0s finished
+[LinearProbe] Top-1: 86.97% | Top-5: 97.04% | Params: 52,326 | 25.0s
+  ✓ LinearProbe (29.5s)
+[OptimalTransport] Top-1: 19.06% | Top-5: 43.02% | Params: 0 | 306.9s
+  ✓ OptimalTransport (307.1s)
+
+--- Trainable methods (Flowers102) ---
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+  Epoch 1/10 | Loss: 1.8900 | Acc: 56.08% | Val Top-1: 63.33%
+  Epoch 2/10 | Loss: 1.4145 | Acc: 63.92% | Val Top-1: 71.46%
+  Epoch 3/10 | Loss: 1.1242 | Acc: 70.98% | Val Top-1: 72.68%
+  Epoch 4/10 | Loss: 0.9954 | Acc: 74.31% | Val Top-1: 74.63%
+  Epoch 5/10 | Loss: 0.8639 | Acc: 75.59% | Val Top-1: 77.05%
+  Epoch 6/10 | Loss: 0.7310 | Acc: 79.31% | Val Top-1: 79.28%
+  Epoch 7/10 | Loss: 0.6372 | Acc: 81.08% | Val Top-1: 80.22%
+  Epoch 8/10 | Loss: 0.5595 | Acc: 84.22% | Val Top-1: 81.90%
+  Epoch 9/10 | Loss: 0.5102 | Acc: 85.59% | Val Top-1: 82.05%
+  Epoch 10/10 | Loss: 0.4924 | Acc: 86.47% | Val Top-1: 82.35%
+[CoOp] Done in 386.4s | Final Loss: 0.4924 | Best Val: 82.35%
+[CoOp] Top-1: 82.35% | Top-5: 96.75% | Params: 8,192 | 31.7s
+  ✓ CoOp (419.4s)
+[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
+  Epoch 1/5 | Loss: 1.3007 | Acc: 69.41% | Val Top-1: 71.56%
+  Epoch 2/5 | Loss: 1.1343 | Acc: 70.49% | Val Top-1: 74.71%
+  Epoch 3/5 | Loss: 0.8124 | Acc: 78.24% | Val Top-1: 79.49%
+  Epoch 4/5 | Loss: 0.5872 | Acc: 83.63% | Val Top-1: 82.86%
+  Epoch 5/5 | Loss: 0.4899 | Acc: 87.35% | Val Top-1: 83.88%
+[CLIP-Adapter] Done in 184.9s | Final Loss: 0.4899 | Best Val: 83.88%
+[CLIP-Adapter] Top-1: 83.88% | Top-5: 96.81% | Params: 131,712 | 31.8s
+  ✓ CLIP-Adapter (218.0s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
+  Epoch 1/10 | Loss: 2.9053 | Acc: 37.65% | Val Top-1: 57.34%
+  Epoch 2/10 | Loss: 1.4911 | Acc: 62.55% | Val Top-1: 66.45%
+  Epoch 3/10 | Loss: 1.2239 | Acc: 68.43% | Val Top-1: 69.31%
+  Epoch 4/10 | Loss: 1.1032 | Acc: 71.27% | Val Top-1: 71.91%
+  Epoch 5/10 | Loss: 1.0167 | Acc: 72.84% | Val Top-1: 73.20%
+  Epoch 6/10 | Loss: 0.9498 | Acc: 75.00% | Val Top-1: 74.09%
+  Epoch 7/10 | Loss: 0.8858 | Acc: 76.27% | Val Top-1: 75.07%
+  Epoch 8/10 | Loss: 0.8495 | Acc: 77.16% | Val Top-1: 75.88%
+  Epoch 9/10 | Loss: 0.8188 | Acc: 78.53% | Val Top-1: 76.26%
+  Epoch 10/10 | Loss: 0.8064 | Acc: 78.73% | Val Top-1: 76.32%
+[CoOp+Adapter] Done in 384.5s | Final Loss: 0.8064 | Best Val: 76.32%
+[CoOp+Adapter] Top-1: 76.32% | Top-5: 92.05% | Params: 139,904 | 30.6s
+  ✓ CoOp+Adapter (413.9s)
+Tip-Adapter cache built: keys torch.Size([1020, 512]), values torch.Size([1020, 102])
+[Tip-Adapter] Top-1: 81.17% | Top-5: 91.90% | Params: 0 | 29.2s
+[Tip-Adapter-F] Top-1: 94.32% | Top-5: 99.04% | Params: 522,240 | 26.6s
+  ✓ Tip-Adapter + Tip-Adapter-F (147.1s)
+[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
+  Epoch 1/5 | Loss: 1.3010 | Acc: 69.41% | Val Top-1: 71.52%
+  Epoch 2/5 | Loss: 1.1583 | Acc: 71.18% | Val Top-1: 71.74%
+  Epoch 3/5 | Loss: 0.9630 | Acc: 76.27% | Val Top-1: 73.43%
+  Epoch 4/5 | Loss: 0.8275 | Acc: 79.31% | Val Top-1: 74.22%
+  Epoch 5/5 | Loss: 0.7623 | Acc: 80.59% | Val Top-1: 74.47%
+[LoRA] Done in 188.8s | Final Loss: 0.7623 | Best Val: 74.47%
+[LoRA] Top-1: 74.47% | Top-5: 90.88% | Params: 368,640 | 32.0s
+  ✓ LoRA (222.2s)
+
+=======================================================================
+  UNIFIED RESULTS TABLE
+=======================================================================
+| Method           |    EuroSAT |        DTD | Flowers102 |    Params |
+|------------------|------------|------------|------------|-----------|
+| ZeroShot         |     46.35% |     54.89% |     71.46% |         0 |
+| ZeroShot-Ensemble |     50.61% |     57.34% |     71.93% |         0 |
+| LinearProbe      |     93.81% |     70.90% |     86.97% |    52,326 |
+| OptimalTransport |     20.31% |     23.30% |     19.06% |         0 |
+| CoOp             |     95.37% |     73.46% |     82.35% |     8,192 |
+| CLIP-Adapter     |     96.59% |     75.21% |     83.88% |   131,712 |
+| CoOp+Adapter     |     95.44% |     74.31% |     76.32% |   139,904 |
+| Tip-Adapter      |     76.13% |     68.03% |     81.17% |         0 |
+| Tip-Adapter-F    |     96.56% |     78.24% |     94.32% |   522,240 |
+| LoRA             |     98.17% |     65.90% |     74.47% |   368,640 |
+=======================================================================
+
+[Results] Saved to /home/marco/APAI_exam/plots/unified_results.json
+[Plot] Saved: /home/marco/APAI_exam/plots/unified_comparison.png
+[Plot] Saved: /home/marco/APAI_exam/plots/accuracy_vs_params_unified.png
+/home/marco/APAI_exam/src/run_all.py:673: MatplotlibDeprecationWarning: The get_cmap function was deprecated in Matplotlib 3.7 and will be removed in 3.11. Use ``matplotlib.colormaps[name]`` or ``matplotlib.colormaps.get_cmap()`` or ``pyplot.get_cmap()`` instead.
+  cmap = plt.cm.get_cmap("tab10" if n_classes <= 10 else "tab20", n_classes)
+[Plot] Saved: /home/marco/APAI_exam/plots/tsne_features.png
+
+[run_all] Total time: 167.1 minutes
+[run_all] Done.

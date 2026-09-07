@@ -809,7 +809,7 @@ def run_all_evaluations(
         )
 
         if train_loader is None:
-            train_loader, _ = get_dataloaders(batch_size=256, num_workers=4)
+            train_loader, _ = get_dataloaders(batch_size=256, num_workers=8)
         lp_model = LinearProbeCLIP(clip_wrapper)
         lp_model.fit(train_loader)
         all_results["LinearProbe"] = evaluate(
@@ -1382,7 +1382,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     _, test_loader = get_dataloaders(
-        batch_size=64, num_workers=4, download=True
+        batch_size=64, num_workers=8, download=True
     )
 
     # Baselines only.  To put CoOp / CLIP-Adapter / Tip-Adapter / LoRA on
