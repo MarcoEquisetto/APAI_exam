@@ -362,6 +362,11 @@ def train(
     lr : float
         Learning rate.  CoOp typically uses 2e-3 with SGD;  CLIP-Adapter
         uses 1e-3 with AdamW.  Tune as needed.
+
+        A model that needs a *different* rate per module can define
+        ``trainable_param_groups(lr) -> List[dict]`` and receive ``lr`` as
+        the base value; see ``CoOpAdapterModel``.  Models that do not define
+        the method are unaffected.
     optimizer_type : str
         One of ``"sgd"``, ``"adam"``, ``"adamw"``.
     weight_decay : float
@@ -430,20 +435,52 @@ def train(
     print(f"[{model_name}] Training {n_trainable:,} params | {epochs} epochs | LR={lr} | {optimizer_type}")
 
     # ----------------------------------------------------------------
+    # Per-module optimizer groups (opt-in).
+    #
+    # A model composed of two independently designed modules — the joint
+    # CoOp + CLIP-Adapter model is the case in this project — cannot always
+    # be trained well with one learning rate for everything.  A model that
+    # needs a split defines ``trainable_param_groups(lr)`` and returns the
+    # groups; every other model in the project does not define it and gets
+    # the flat list exactly as before, so this is behaviour-preserving.
+    #
+    # One optimizer with several groups, never several optimizers: the
+    # scheduler, the warmup and the ``history["lr"]`` series all assume a
+    # single optimizer, and splitting it would quietly desynchronize them.
+    # ----------------------------------------------------------------
+    param_input = trainable_params
+    if hasattr(model, "trainable_param_groups"):
+        groups = model.trainable_param_groups(lr)
+        grouped = sum(p.numel() for g in groups for p in g["params"])
+        if grouped != n_trainable:
+            raise ValueError(
+                f"{type(model).__name__}.trainable_param_groups() covers "
+                f"{grouped:,} parameters but the model has {n_trainable:,} "
+                "trainable ones.  A module left out of the groups receives no "
+                "gradient update and trains silently at zero."
+            )
+        param_input = groups
+        print("  param groups: " + ", ".join(
+            f"{g.get('name', f'group{i}')}="
+            f"{sum(p.numel() for p in g['params']):,}@{g.get('lr', lr):g}"
+            for i, g in enumerate(groups)
+        ))
+
+    # ----------------------------------------------------------------
     # Optimizer
     # ----------------------------------------------------------------
     if optimizer_type == "sgd":
         optimizer = SGD(
-            trainable_params, lr=lr,
+            param_input, lr=lr,
             momentum=momentum, weight_decay=weight_decay,
         )
     elif optimizer_type == "adam":
         optimizer = Adam(
-            trainable_params, lr=lr, weight_decay=weight_decay,
+            param_input, lr=lr, weight_decay=weight_decay,
         )
     elif optimizer_type == "adamw":
         optimizer = AdamW(
-            trainable_params, lr=lr, weight_decay=weight_decay,
+            param_input, lr=lr, weight_decay=weight_decay,
         )
     else:
         raise ValueError(f"Unknown optimizer_type: '{optimizer_type}'")
@@ -1418,9 +1455,25 @@ if __name__ == "__main__":
         test_loader, device=device, use_wandb=False
     )
 
+    # ----------------------------------------------------------------
+    # Figures go to plots/baselines_only/, NOT to plots/.
+    #
+    # This entry point evaluates four baselines on EuroSAT.  ``run_all.py``
+    # evaluates ten methods on three datasets and writes to plots/ under
+    # some of the same file names.  When both wrote to the same directory
+    # the repository ended up carrying two generations of figures that told
+    # different stories — an "Accuracy vs. Trainable Parameters" chart with
+    # four bars next to a unified one with ten, both current, both wrong to
+    # cite without saying which is which.
+    #
+    # plots/ is now owned by run_all.py alone.  Everything produced here is
+    # a baseline-only sanity check and is filed as such.
+    # ----------------------------------------------------------------
+    save_dir = str(PROJECT_ROOT / "plots" / "baselines_only")
+
     # Generate and save comparative plots.
-    plot_comparative_results(results, save_dir="./plots")
+    plot_comparative_results(results, save_dir=save_dir)
 
     # Generate confusion matrices and per-class analysis.
-    plot_confusion_matrices(results, save_dir="./plots")
-    plot_per_class_metrics(results, save_dir="./plots")
+    plot_confusion_matrices(results, save_dir=save_dir)
+    plot_per_class_metrics(results, save_dir=save_dir)

@@ -1,3 +1,64 @@
+"""
+coop.py — Context Optimization (CoOp): learnable text prompts  [Carlo]
+======================================================================
+
+Standard zero-shot CLIP classifies by writing a sentence for every class —
+``"a satellite image of forest"`` — encoding it, and taking the cosine
+similarity against the image embedding.  The sentence is a *hand-written
+hyperparameter*: on EuroSAT the difference between two reasonable phrasings
+is several accuracy points, and nobody can tell in advance which one CLIP
+prefers.
+
+**CoOp** (Zhou et al., 2022) removes the guesswork.  The fixed words of the
+template are replaced by ``M`` continuous vectors that live in the text
+transformer's input space and are optimized by gradient descent:
+
+::
+
+    [SOS] [v₁] [v₂] ... [v_M] [tok(class name)] [EOS] [pad ...]
+           └──── nn.Parameter, the only thing that trains ────┘
+
+Everything else stays frozen — the token embedding table, the twelve
+transformer blocks, the final projection, the whole vision tower.  For
+``M = 16`` on ViT-B/32 that is **8.192 trainable parameters against CLIP's
+86 million**, roughly one ten-thousandth of the model.
+
+Two variants, both required by the project brief:
+
+* **Unified Context** — one shared ``(M, D)`` block for every class.
+  Cheap (``M × 512``) and the default.
+* **Class-Specific Context (CSC)** — a separate ``(C, M, D)`` block per
+  class.  ``C`` times more parameters, more capacity, less sharing.
+
+Two things in this file look like mistakes and are not
+--------------------------------------------------------
+
+1. **``get_text_features()`` has no ``@torch.no_grad()``**, while the
+   version it overrides in ``BaseCLIPWrapper`` does.  That is the whole
+   point: with the decorator inherited, no gradient would ever reach
+   ``ctx``, training would run to completion without an error, and the
+   reported accuracy would be that of the initial random context.  Anybody
+   "restoring consistency" by adding the decorator breaks the method
+   silently.
+
+2. **``get_text_features()`` ignores its ``class_names`` argument.**  The
+   prompts are not built from strings at call time — the class-name
+   embeddings were baked into the prompt learner's frozen suffix buffer at
+   construction time, and the context is a tensor.  The argument survives
+   only so the signature stays compatible with ``BaseCLIPWrapper`` and with
+   ``engine.train()``, which hands over already-formatted prompts.  A
+   *different number* of classes is rejected loudly rather than ignored.
+
+For the same reason there is no ``predict()`` override here:
+``BaseCLIPWrapper.predict()`` recomputes the text prototypes on every call
+instead of reading a cache built in ``__init__``, which is exactly what a
+model whose text side is being trained needs.
+
+Run ``python src/coop.py`` for a smoke test that checks the parameter counts
+of all three configurations and that a backward pass actually reaches
+``ctx``.
+"""
+
 import sys
 from pathlib import Path
 

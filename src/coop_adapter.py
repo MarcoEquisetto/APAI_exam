@@ -74,6 +74,10 @@ Two traps that must survive any future clean-up
    recomputes them on every call. That is not an oversight: ``ctx`` changes
    after every optimizer step, so a cache built in ``__init__`` would
    report the accuracy of the initial *random* context forever.
+3. **The two halves must not share one learning rate blindly.** See
+   ``trainable_param_groups()`` below: training this model with CoOp's
+   SGD recipe applied to the adapter as well makes it lose to the plain
+   adapter, and the loss curve looks perfectly healthy while it happens.
 """
 
 import sys
@@ -161,6 +165,7 @@ class CoOpAdapterModel(BaseCLIPWrapper):
         alpha: float = 0.2,
         learnable_alpha: bool = False,
         constrain_alpha: bool = True,
+        adapter_lr_scale: float = 1.0,
     ) -> None:
         # ------------------------------------------------------------------
         # EXPLICIT call to the base class, not ``super().__init__()``.
@@ -186,6 +191,7 @@ class CoOpAdapterModel(BaseCLIPWrapper):
         self.n_ctx = n_ctx
         self.class_specific = class_specific
         self.reduction_ratio = reduction_ratio
+        self.adapter_lr_scale = adapter_lr_scale
 
         # ------------------------------------------------------------------
         # Text side: CoOp's prompt learner.
@@ -266,6 +272,60 @@ class CoOpAdapterModel(BaseCLIPWrapper):
         """Update the residual blending factor in place."""
         self.adapter.alpha = new_alpha
 
+    # ----------------------------------------------------------------------
+    # Optimizer hook
+    # ----------------------------------------------------------------------
+    def trainable_param_groups(self, lr: float) -> List[dict]:
+        """
+        Split the trainable tensors into two optimizer groups.
+
+        ``engine.train()`` calls this method **if the model defines it** and
+        hands the result to the optimizer instead of one flat parameter list.
+        No other model in the project defines it, so nothing else changes
+        behaviour.
+
+        Why it exists
+        -------------
+        The two halves of this model come from papers with different
+        recipes: CoOp trains its context with SGD + momentum at 2e-3, while
+        CLIP-Adapter trains its MLP with AdamW at 1e-3.  A single
+        ``lr`` for both is not a neutral choice — it is how the joint model
+        ends up *worse* than either half alone.  The first full run of
+        ``run_all.py`` trained this model with CoOp's SGD at 2e-3 applied to
+        the adapter as well; the adapter's 131.712 near-zero-initialized
+        weights barely moved, and the joint model lost to the plain adapter
+        on all three datasets (−7,6 points on Flowers102).  That was a
+        configuration artefact, not a finding.
+
+        Two groups under **one** optimizer, not two optimizers: mixing SGD
+        and AdamW would also mean two schedulers and two warmups, and the
+        per-epoch ``lr`` logged in ``history`` would stop meaning anything.
+
+        Parameters
+        ----------
+        lr : float
+            Base learning rate, applied to the context vectors.  The adapter
+            group gets ``lr * self.adapter_lr_scale``.
+
+        Returns
+        -------
+        groups : List[dict]
+            Two ``{"params": ..., "lr": ...}`` dictionaries, tagged with a
+            ``"name"`` so the caller can log which group is which.
+        """
+        return [
+            {
+                "name": "context",
+                "params": [self.prompt_learner.ctx],
+                "lr": lr,
+            },
+            {
+                "name": "adapter",
+                "params": [p for p in self.adapter.parameters() if p.requires_grad],
+                "lr": lr * self.adapter_lr_scale,
+            },
+        ]
+
     def parameter_breakdown(self) -> dict:
         """
         Trainable parameters split by module.
@@ -338,6 +398,20 @@ if __name__ == "__main__":
     print(f"predict() inherited from: {owner}")     # expected: BaseCLIPWrapper
     preds, sims = model.predict(dummy_images)
     print(f"predict() shapes  : preds {tuple(preds.shape)}, sims {tuple(sims.shape)}")
+
+    # ------------------------------------------------------------------
+    # 4b. The optimizer groups: every trainable tensor must appear exactly
+    #     once, or the module left out silently never learns.
+    # ------------------------------------------------------------------
+    groups = model.trainable_param_groups(lr=1e-3)
+    grouped = sum(p.numel() for g in groups for p in g["params"])
+    print("\nparam groups      : " + ", ".join(
+        f"{g['name']} {sum(p.numel() for p in g['params']):,} @ lr={g['lr']:g}"
+        for g in groups
+    ))
+    print(f"grouped total     : {grouped:,} "
+          f"(count_trainable_params: {model.count_trainable_params():,})")
+    assert grouped == model.count_trainable_params(), "a trainable tensor is missing from the groups"
 
     # ------------------------------------------------------------------
     # 5. A different class set: 47 DTD classes, no template needed.

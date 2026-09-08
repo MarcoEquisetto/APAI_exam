@@ -221,6 +221,83 @@ come `alpha_final` nei risultati.
 
 ---
 
+## 3-bis. La griglia comparativa — `src/run_all.py`
+
+È **il** driver degli esperimenti: addestra e valuta ogni metodo su ogni
+dataset e produce tutte le figure e le tabelle che finiscono nel report.
+Dopo i fix, `plots/` è scritta da questo script e da nessun altro
+(`engine.py` lanciato da solo scrive in `plots/baselines_only/`), così la
+cartella non può più contenere due generazioni di figure che si
+contraddicono.
+
+```bash
+# Griglia principale: 16-shot, budget appaiato, tre semi.
+python src/run_all.py --shots 16 --seeds 0 1 2 --epochs 10
+
+# Riferimento full-shot, un solo seme.
+python src/run_all.py --shots 0 --seeds 0 --epochs 10 --out fullshot_results.json
+
+# Un dataset alla volta: un'interruzione costa un dataset, non tutti e tre.
+python src/run_all.py --dataset eurosat --shots 16 --seeds 0 1 2
+
+# Prova end-to-end veloce, pochi minuti.
+python src/run_all.py --dataset eurosat --shots 16 --seeds 0 --epochs 2 --no-tsne
+
+# Solo le figure, dai risultati già su disco. Nessuna GPU.
+python src/run_all.py --plots-only
+```
+
+| Flag | Default | Note |
+|---|---|---|
+| `--shots K` | 16 | Immagini etichettate per classe, **le stesse per ogni metodo**. `0` = full-shot |
+| `--seeds` | `0` | Uno o più semi; i risultati escono come media ± deviazione standard |
+| `--epochs` | 10 | **Uguale per tutti** i metodi addestrabili: è ciò che rende il confronto un confronto |
+| `--dataset` | tutti | `eurosat`, `dtd`, `flowers102` |
+| `--adapter-lr-scale` | 1.0 | Moltiplicatore del learning rate per la metà "adapter" del modello congiunto |
+| `--skip-slow` | off | Salta l'Optimal Transport sopra le 10 classi (su Flowers102 costa ~5 minuti a passata) |
+| `--no-tsne` | off | |
+| `--out` | `unified_results.json` | Nome del JSON dentro `plots/` |
+| `--plots-only` | off | Ridisegna tutto senza toccare la GPU |
+
+### Cosa è cambiato, e perché
+
+Tre cose che nella prima versione rendevano i numeri non confrontabili:
+
+- **Il budget.** CoOp girava 10 epoche con SGD, l'adapter e LoRA 5 con AdamW.
+  Dire "l'adapter batte CoOp di 1,2 punti" confondeva il metodo con il
+  budget. Ora `--epochs` vale per tutti; l'ottimizzatore resta quello del
+  paper di ciascun metodo, perché quello *fa parte* del metodo.
+- **La cache di Tip-Adapter.** Era costruita sull'intero training split
+  (`num_shots=99999`): 21.600 chiavi, e Tip-Adapter-F dichiarava 11.059.200
+  parametri addestrabili. Ora la cache è K-shot e viene dallo **stesso**
+  support set seedato che vedono gli altri metodi, quindi non dipende più
+  nemmeno dall'ordine di shuffle del loader.
+- **Il modello congiunto.** Veniva addestrato con la ricetta di CoOp (SGD
+  2e-3) applicata anche alle 131.712 righe dell'adapter, che vuole AdamW
+  1e-3: l'adapter non si muoveva e il congiunto perdeva contro l'adapter da
+  solo su tutti e tre i dataset. Ora ci sono due gruppi di ottimizzazione
+  (`CoOpAdapterModel.trainable_param_groups`) sotto AdamW.
+
+### Le due tabelle
+
+Lo script stampa **due** tabelle markdown, non una: accuratezza e parametri
+addestrabili. Non è pignoleria — la versione precedente aveva una sola
+colonna `Params`, riempita dentro il ciclo sui dataset, quindi sopravviveva
+solo il valore dell'ultimo: con l'ordine EuroSAT, DTD, Flowers102 ogni riga
+mostrava i parametri di Flowers102, e il Linear Probe risultava 52.326 sulla
+riga EuroSAT dove sono 5.130.
+
+### Costo
+
+Sulla macchina di Marco una passata full-shot su tre dataset e dieci metodi
+ha richiesto **167 minuti**. Il regime 16-shot è molto più economico —
+160 immagini per epoca su EuroSAT invece di 21.600 — ma la valutazione gira
+sempre sull'intero test set, quindi il costo per seme non scende
+proporzionalmente. Con tre semi, calcolare il tempo su un dataset solo prima
+di lanciare tutto.
+
+---
+
 ## 4. Uso da Python — le API
 
 Le cose che non hanno una riga di comando dedicata.
@@ -386,22 +463,41 @@ EuroSAT.
 ## 5. Dove finisce cosa
 
 ```
-plots/
-├── coop_results.json               ← risultati CoOp, per tag (13 run)
-├── coop_sweeps.png                 ← 4 pannelli delle ablation
-├── coop_training_curves.png
-├── clip_adapter_results.json       ← sweep reduction ratio
-├── clip_adapter_alpha_results.json ← sweep alpha
-├── clip_adapter_*_sweep.png
-├── accuracy_vs_params.png          ← figure comparative (engine.py)
-├── resource_usage.png
-├── combined_summary.png
-├── confusion_matrices.png
+plots/                                  ← scritta SOLO da run_all.py
+├── unified_results.json                ← la griglia completa + il blocco
+│                                          "_config" con protocollo e ricette
+├── predictions_<dataset>.npz           ← predizioni e label grezze, così le
+│                                          figure si rifanno senza GPU
+├── unified_comparison.png              ← accuratezza, con barre d'errore
+├── accuracy_vs_params_unified.png      ← LA figura del progetto
+├── training_cost.png                   ← il costo che davvero discrimina
+├── memory_vs_epochs_<dataset>.png      ← deliverable del brief
+├── tsne_features.png                   ← 3 pannelli + silhouette score
+├── confusion_matrices.png              ← solo dataset con ≤20 classi
 ├── per_class_accuracy.png
-└── memory_vs_epochs.png            ← nuovo, da plot_memory_vs_epochs()
+│
+├── coop_results.json                   ← ablation di Carlo, per tag (13 run)
+├── coop_sweeps.png
+├── coop_training_curves.png
+├── clip_adapter_results.json           ← sweep reduction ratio di Marco
+├── clip_adapter_alpha_results.json     ← sweep alpha
+├── clip_adapter_*_sweep.png
+│
+└── baselines_only/                     ← `python src/engine.py`, 4 baseline
+    ├── accuracy_vs_params.png             su EuroSAT. Tenute separate: sono
+    ├── resource_usage.png                 un sanity check, non i risultati
+    ├── combined_summary.png               del progetto
+    ├── confusion_matrices.png
+    └── per_class_accuracy.png
 
-data/eurosat/                       ← 94 MB, in .gitignore
+data/eurosat/                           ← 94 MB, in .gitignore
 ```
+
+> **Perché `baselines_only/`.** `engine.py` e `run_all.py` scrivevano gli
+> stessi nomi di file nella stessa cartella: `accuracy_vs_params.png` con
+> quattro barre su EuroSAT accanto a `accuracy_vs_params_unified.png` con
+> dieci metodi su tre dataset, entrambe aggiornate, nessuna delle due
+> etichettata. Ora `plots/` ha un solo autore.
 
 Tutti i percorsi sono assoluti, derivati da `__file__`: qualunque sia la
 directory da cui lanci uno script, i file finiscono in `<repo>/plots/`.
