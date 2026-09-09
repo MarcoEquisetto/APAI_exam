@@ -1,313 +1,733 @@
 (APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src$ python run_all.py
 [run_all] Device: cuda
+[run_all] Protocol: 16-shot, 10 epochs for every trainable method, seeds [0]
+[run_all] Note: val_loader is the test set — model selection is not held out. Declare this in the report.
 
 ######################################################################
 #  DATASET: EuroSAT
 ######################################################################
-  Classes: 10  |  Train: 21600  |  Test: 5400
+[few_shot] 16-shot support set: 160 images across 10 classes (seed=0).
+  Classes: 10  |  Train: 160 (16-shot, of 21600)  |  Test: 5400
 
---- Baselines (EuroSAT) ---
+--- Training-free baselines (EuroSAT) ---
+[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 36.5s
+  ✓ ZeroShot (36.8s)
+[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 35.0s
+  ✓ ZeroShot-Ensemble (35.1s)
+[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 57.1s
+  ✓ OptimalTransport (57.2s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.0s finished
+[LinearProbe] Top-1: 78.94% | Top-5: 99.00% | Params: 5,130 | 35.1s
+  ✓ LinearProbe seed=0 (36.4s)
+
+--- Trainable methods (EuroSAT) | 10 epochs | seeds [0] ---
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 43.6s
-  ✓ ZeroShot (43.9s)
-[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 35.6s
-  ✓ ZeroShot-Ensemble (35.7s)
-[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.8s finished
-[LinearProbe] Top-1: 93.81% | Top-5: 99.98% | Params: 5,130 | 34.1s
-  ✓ LinearProbe (193.2s)
-[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 64.3s
-  ✓ OptimalTransport (64.3s)
-
---- Trainable methods (EuroSAT) ---
-[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
-^CTraceback (most recent call last):
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 1024, in <module>
-    main()
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 988, in main
-    ds_results, ds_tsne = run_dataset(
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 881, in run_dataset
-    results["CoOp"] = run_coop(
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/run_all.py", line 263, in run_coop
-    history = engine.train(
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/engine.py", line 549, in train
-    for batch_idx, (images, labels, _class_texts) in enumerate(train_loader):
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 701, in __next__
-    data = self._next_data()
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 757, in _next_data
-    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 52, in fetch
-    data = [self.dataset[idx] for idx in possibly_batched_index]
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 52, in <listcomp>
-    data = [self.dataset[idx] for idx in possibly_batched_index]
-  File "/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src/dataset.py", line 211, in __getitem__
-    image, label = self.subset[idx]
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/utils/data/dataset.py", line 412, in __getitem__
-    return self.dataset[self.indices[idx]]
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 245, in __getitem__
-    sample = self.loader(path)
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 284, in default_loader
-    return pil_loader(path)
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torchvision/datasets/folder.py", line 264, in pil_loader
-    return img.convert("RGB")
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/Image.py", line 1069, in convert
-    self.load()
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/ImageFile.py", line 392, in load
-    s = read(read_bytes)
-  File "/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/PIL/JpegImagePlugin.py", line 418, in load_read
-    s = self.fp.read(read_bytes)
-KeyboardInterrupt
-
-(APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/src$ cp -r /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam ~/APAI_exam
-cd ~/APAI_exam/src
-(APAI) marco@Marco:~/APAI_exam/src$ python run_all.py
-[run_all] Device: cuda
-
-######################################################################
-#  DATASET: EuroSAT
-######################################################################
-  Classes: 10  |  Train: 21600  |  Test: 5400
-
---- Baselines (EuroSAT) ---
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 8.8s
-  ✓ ZeroShot (9.0s)
-[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 11.0s
-  ✓ ZeroShot-Ensemble (11.1s)
-[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.8s finished
-[LinearProbe] Top-1: 93.81% | Top-5: 99.98% | Params: 5,130 | 8.6s
-  ✓ LinearProbe (53.2s)
-[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 34.6s
-  ✓ OptimalTransport (34.6s)
-
---- Trainable methods (EuroSAT) ---
 [CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
 /home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
   warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
-  Epoch 1/10 | Loss: 0.8311 | Acc: 70.33% | Val Top-1: 83.15%
-  Epoch 2/10 | Loss: 0.3546 | Acc: 88.62% | Val Top-1: 91.81%
-  Epoch 3/10 | Loss: 0.2149 | Acc: 93.04% | Val Top-1: 93.52%
-  Epoch 4/10 | Loss: 0.1816 | Acc: 94.20% | Val Top-1: 94.46%
-  Epoch 5/10 | Loss: 0.1663 | Acc: 94.62% | Val Top-1: 94.67%
-  Epoch 6/10 | Loss: 0.1543 | Acc: 95.08% | Val Top-1: 94.61%
-  Epoch 7/10 | Loss: 0.1441 | Acc: 95.35% | Val Top-1: 94.76%
-  Epoch 8/10 | Loss: 0.1343 | Acc: 95.71% | Val Top-1: 95.33%
-  Epoch 9/10 | Loss: 0.1282 | Acc: 95.88% | Val Top-1: 95.39%
-  Epoch 10/10 | Loss: 0.1234 | Acc: 95.98% | Val Top-1: 95.37%
-[CoOp] Done in 636.8s | Final Loss: 0.1234 | Best Val: 95.39%
-[CoOp] Top-1: 95.37% | Top-5: 100.00% | Params: 8,192 | 12.4s
-  ✓ CoOp (652.1s)
-[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
-  Epoch 1/5 | Loss: 1.3216 | Acc: 50.90% | Val Top-1: 57.98%
-  Epoch 2/5 | Loss: 0.2250 | Acc: 92.46% | Val Top-1: 95.24%
-  Epoch 3/5 | Loss: 0.1237 | Acc: 95.81% | Val Top-1: 95.89%
-  Epoch 4/5 | Loss: 0.0953 | Acc: 96.75% | Val Top-1: 96.44%
-  Epoch 5/5 | Loss: 0.0785 | Acc: 97.35% | Val Top-1: 96.59%
-[CLIP-Adapter] Done in 300.2s | Final Loss: 0.0785 | Best Val: 96.59%
-[CLIP-Adapter] Top-1: 96.59% | Top-5: 100.00% | Params: 131,712 | 10.5s
-  ✓ CLIP-Adapter (312.2s)
-[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
-  Epoch 1/10 | Loss: 0.9789 | Acc: 64.30% | Val Top-1: 77.26%
-  Epoch 2/10 | Loss: 0.3660 | Acc: 87.87% | Val Top-1: 91.72%
-  Epoch 3/10 | Loss: 0.2053 | Acc: 93.29% | Val Top-1: 93.54%
-  Epoch 4/10 | Loss: 0.1778 | Acc: 94.18% | Val Top-1: 94.15%
-  Epoch 5/10 | Loss: 0.1635 | Acc: 94.78% | Val Top-1: 94.63%
-  Epoch 6/10 | Loss: 0.1493 | Acc: 95.13% | Val Top-1: 94.89%
-  Epoch 7/10 | Loss: 0.1402 | Acc: 95.57% | Val Top-1: 95.02%
-  Epoch 8/10 | Loss: 0.1317 | Acc: 95.71% | Val Top-1: 95.15%
-  Epoch 9/10 | Loss: 0.1252 | Acc: 96.06% | Val Top-1: 95.33%
-  Epoch 10/10 | Loss: 0.1215 | Acc: 96.23% | Val Top-1: 95.44%
-[CoOp+Adapter] Done in 755.5s | Final Loss: 0.1215 | Best Val: 95.44%
-[CoOp+Adapter] Top-1: 95.44% | Top-5: 100.00% | Params: 139,904 | 14.7s
-  ✓ CoOp+Adapter (771.4s)
-Tip-Adapter cache built: keys torch.Size([21600, 512]), values torch.Size([21600, 10])
-[Tip-Adapter] Top-1: 76.13% | Top-5: 98.56% | Params: 0 | 11.1s
-[Tip-Adapter-F] Top-1: 96.56% | Top-5: 100.00% | Params: 11,059,200 | 11.5s
-  ✓ Tip-Adapter + Tip-Adapter-F (1108.6s)
-[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
-  Epoch 1/5 | Loss: 1.3101 | Acc: 51.82% | Val Top-1: 57.81%
-  Epoch 2/5 | Loss: 0.2185 | Acc: 93.42% | Val Top-1: 97.22%
-  Epoch 3/5 | Loss: 0.0667 | Acc: 97.77% | Val Top-1: 97.85%
-  Epoch 4/5 | Loss: 0.0427 | Acc: 98.58% | Val Top-1: 98.20%
-  Epoch 5/5 | Loss: 0.0309 | Acc: 99.09% | Val Top-1: 98.17%
-[LoRA] Done in 650.0s | Final Loss: 0.0309 | Best Val: 98.20%
-[LoRA] Top-1: 98.17% | Top-5: 100.00% | Params: 368,640 | 16.0s
-  ✓ LoRA (667.4s)
+  Epoch 1/10 | Loss: 1.3690 | Acc: 48.75% | Val Top-1: 48.28%
+  Epoch 2/10 | Loss: 1.4757 | Acc: 50.00% | Val Top-1: 61.02%
+  Epoch 3/10 | Loss: 1.1061 | Acc: 62.50% | Val Top-1: 65.26%
+  Epoch 4/10 | Loss: 0.9608 | Acc: 62.50% | Val Top-1: 66.04%
+  Epoch 5/10 | Loss: 0.8373 | Acc: 70.62% | Val Top-1: 68.76%
+  Epoch 6/10 | Loss: 0.7345 | Acc: 73.12% | Val Top-1: 74.48%
+  Epoch 7/10 | Loss: 0.6971 | Acc: 78.75% | Val Top-1: 74.15%
+  Epoch 8/10 | Loss: 0.6277 | Acc: 80.62% | Val Top-1: 74.80%
+  Epoch 9/10 | Loss: 0.6008 | Acc: 80.62% | Val Top-1: 75.33%
+  Epoch 10/10 | Loss: 0.5805 | Acc: 81.88% | Val Top-1: 75.87%
+[CoOp] Done in 357.4s | Final Loss: 0.5805 | Best Val: 75.87%
+[CoOp] Top-1: 75.87% | Top-5: 99.02% | Params: 8,192 | 33.7s
+  ✓ CoOp seed=0 (395.8s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.4248 | Acc: 49.38% | Val Top-1: 46.43%
+  Epoch 2/10 | Loss: 1.2625 | Acc: 57.50% | Val Top-1: 54.89%
+  Epoch 3/10 | Loss: 1.0003 | Acc: 63.12% | Val Top-1: 63.13%
+  Epoch 4/10 | Loss: 0.8026 | Acc: 69.38% | Val Top-1: 71.28%
+  Epoch 5/10 | Loss: 0.6679 | Acc: 75.00% | Val Top-1: 76.74%
+  Epoch 6/10 | Loss: 0.5678 | Acc: 81.88% | Val Top-1: 78.80%
+  Epoch 7/10 | Loss: 0.5112 | Acc: 83.75% | Val Top-1: 79.98%
+  Epoch 8/10 | Loss: 0.4726 | Acc: 85.62% | Val Top-1: 80.98%
+  Epoch 9/10 | Loss: 0.4491 | Acc: 86.88% | Val Top-1: 81.26%
+  Epoch 10/10 | Loss: 0.4397 | Acc: 87.50% | Val Top-1: 81.26%
+[CLIP-Adapter] Done in 356.1s | Final Loss: 0.4397 | Best Val: 81.26%
+[CLIP-Adapter] Top-1: 81.26% | Top-5: 99.17% | Params: 131,712 | 34.3s
+  ✓ CLIP-Adapter seed=0 (394.9s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 1.3687 | Acc: 49.38% | Val Top-1: 47.91%
+  Epoch 2/10 | Loss: 1.2838 | Acc: 52.50% | Val Top-1: 60.11%
+  Epoch 3/10 | Loss: 1.0102 | Acc: 65.62% | Val Top-1: 69.04%
+  Epoch 4/10 | Loss: 0.7943 | Acc: 75.00% | Val Top-1: 71.54%
+  Epoch 5/10 | Loss: 0.6456 | Acc: 76.88% | Val Top-1: 78.85%
+  Epoch 6/10 | Loss: 0.5304 | Acc: 80.00% | Val Top-1: 79.65%
+  Epoch 7/10 | Loss: 0.4588 | Acc: 85.00% | Val Top-1: 80.63%
+  Epoch 8/10 | Loss: 0.4124 | Acc: 85.62% | Val Top-1: 80.69%
+  Epoch 9/10 | Loss: 0.3768 | Acc: 86.88% | Val Top-1: 81.48%
+  Epoch 10/10 | Loss: 0.3644 | Acc: 88.75% | Val Top-1: 81.59%
+[CoOp+Adapter] Done in 420.0s | Final Loss: 0.3644 | Best Val: 81.59%
+[CoOp+Adapter] Top-1: 81.59% | Top-5: 99.35% | Params: 139,904 | 36.7s
+  ✓ CoOp+Adapter seed=0 (461.5s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.4241 | Acc: 49.38% | Val Top-1: 46.56%
+  Epoch 2/10 | Loss: 1.1852 | Acc: 55.62% | Val Top-1: 61.28%
+  Epoch 3/10 | Loss: 0.8592 | Acc: 72.50% | Val Top-1: 70.33%
+  Epoch 4/10 | Loss: 0.6788 | Acc: 80.62% | Val Top-1: 74.28%
+  Epoch 5/10 | Loss: 0.5641 | Acc: 83.12% | Val Top-1: 77.44%
+  Epoch 6/10 | Loss: 0.4949 | Acc: 86.25% | Val Top-1: 79.30%
+  Epoch 7/10 | Loss: 0.4482 | Acc: 89.38% | Val Top-1: 80.24%
+  Epoch 8/10 | Loss: 0.4208 | Acc: 90.62% | Val Top-1: 80.83%
+  Epoch 9/10 | Loss: 0.4065 | Acc: 90.62% | Val Top-1: 81.06%
+  Epoch 10/10 | Loss: 0.4004 | Acc: 90.62% | Val Top-1: 81.15%
+[LoRA] Done in 370.1s | Final Loss: 0.4004 | Best Val: 81.15%
+[LoRA] Top-1: 81.15% | Top-5: 99.19% | Params: 368,640 | 34.6s
+  ✓ LoRA seed=0 (407.8s)
+[few_shot] 16-shot support set: 160 images across 10 classes (seed=0).
+Tip-Adapter cache built: keys torch.Size([160, 512]), values torch.Size([160, 10])
+[Tip-Adapter] Top-1: 74.41% | Top-5: 98.44% | Params: 0 | 33.8s
+[Tip-Adapter-F] Top-1: 86.26% | Top-5: 99.39% | Params: 81,920 | 32.7s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=0 (80.4s)
 
 ######################################################################
 #  DATASET: DTD
 ######################################################################
-Downloading https://thor.robots.ox.ac.uk/dtd/dtd-r1.0.1.tar.gz to /home/marco/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz
-100%|████████████████████████████████████████████████████████████████████████████████| 625M/625M [44:07<00:00, 236kB/s]
-Extracting /home/marco/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz to /home/marco/APAI_exam/data/dtd
-  Classes: 47  |  Train: 1880  |  Test: 1880
+Downloading https://thor.robots.ox.ac.uk/dtd/dtd-r1.0.1.tar.gz to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz
+100%|███████████████████████████████████████████████████████████████████████████████| 625M/625M [03:48<00:00, 2.73MB/s]
+Extracting /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/dtd/dtd-r1.0.1.tar.gz to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/dtd
+[few_shot] 16-shot support set: 752 images across 47 classes (seed=0).
+  Classes: 47  |  Train: 752 (16-shot, of 1880)  |  Test: 1880
 
---- Baselines (DTD) ---
-[ZeroShot] Top-1: 54.89% | Top-5: 86.44% | Params: 0 | 5.6s
-  ✓ ZeroShot (5.6s)
-[ZeroShot-Ensemble] Top-1: 57.34% | Top-5: 87.93% | Params: 0 | 7.8s
-  ✓ ZeroShot-Ensemble (8.5s)
-[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.1s finished
-[LinearProbe] Top-1: 70.90% | Top-5: 93.03% | Params: 24,111 | 7.9s
-  ✓ LinearProbe (16.9s)
-[OptimalTransport] Top-1: 23.30% | Top-5: 42.07% | Params: 0 | 44.1s
-  ✓ OptimalTransport (44.2s)
+--- Training-free baselines (DTD) ---
+[ZeroShot] Top-1: 54.89% | Top-5: 86.44% | Params: 0 | 18.7s
+  ✓ ZeroShot (18.7s)
+[ZeroShot-Ensemble] Top-1: 57.34% | Top-5: 87.93% | Params: 0 | 17.0s
+  ✓ ZeroShot-Ensemble (17.7s)
+[OptimalTransport] Top-1: 23.30% | Top-5: 42.07% | Params: 0 | 53.7s
+  ✓ OptimalTransport (53.8s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.0s finished
+[LinearProbe] Top-1: 65.16% | Top-5: 89.95% | Params: 24,111 | 17.8s
+  ✓ LinearProbe seed=0 (26.6s)
 
---- Trainable methods (DTD) ---
+--- Trainable methods (DTD) | 10 epochs | seeds [0] ---
 [CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
 /home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
   warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
-  Epoch 1/10 | Loss: 2.5837 | Acc: 34.47% | Val Top-1: 44.84%
-  Epoch 2/10 | Loss: 1.5132 | Acc: 56.81% | Val Top-1: 62.34%
-  Epoch 3/10 | Loss: 1.2046 | Acc: 62.66% | Val Top-1: 66.06%
-  Epoch 4/10 | Loss: 1.0416 | Acc: 67.77% | Val Top-1: 68.24%
-  Epoch 5/10 | Loss: 0.9258 | Acc: 71.01% | Val Top-1: 69.57%
-  Epoch 6/10 | Loss: 0.8303 | Acc: 73.72% | Val Top-1: 72.50%
-  Epoch 7/10 | Loss: 0.7710 | Acc: 75.96% | Val Top-1: 72.18%
-  Epoch 8/10 | Loss: 0.7186 | Acc: 76.81% | Val Top-1: 72.87%
-  Epoch 9/10 | Loss: 0.6843 | Acc: 78.03% | Val Top-1: 72.71%
-  Epoch 10/10 | Loss: 0.6572 | Acc: 79.52% | Val Top-1: 73.46%
-[CoOp] Done in 197.0s | Final Loss: 0.6572 | Best Val: 73.46%
-[CoOp] Top-1: 73.46% | Top-5: 95.43% | Params: 8,192 | 9.6s
-  ✓ CoOp (208.0s)
-[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
-  Epoch 1/5 | Loss: 1.5848 | Acc: 53.19% | Val Top-1: 54.84%
-  Epoch 2/5 | Loss: 1.3227 | Acc: 60.96% | Val Top-1: 67.98%
-  Epoch 3/5 | Loss: 0.9167 | Acc: 72.13% | Val Top-1: 73.03%
-  Epoch 4/5 | Loss: 0.6969 | Acc: 79.10% | Val Top-1: 74.52%
-  Epoch 5/5 | Loss: 0.5984 | Acc: 82.93% | Val Top-1: 75.21%
-[CLIP-Adapter] Done in 90.0s | Final Loss: 0.5984 | Best Val: 75.21%
-[CLIP-Adapter] Top-1: 75.21% | Top-5: 95.53% | Params: 131,712 | 9.3s
-  ✓ CLIP-Adapter (100.6s)
-[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
-  Epoch 1/10 | Loss: 2.6014 | Acc: 35.53% | Val Top-1: 41.65%
-  Epoch 2/10 | Loss: 1.6997 | Acc: 52.50% | Val Top-1: 62.82%
-  Epoch 3/10 | Loss: 1.1543 | Acc: 64.63% | Val Top-1: 68.78%
-  Epoch 4/10 | Loss: 0.9413 | Acc: 70.80% | Val Top-1: 70.90%
-  Epoch 5/10 | Loss: 0.8296 | Acc: 73.24% | Val Top-1: 72.71%
-  Epoch 6/10 | Loss: 0.7597 | Acc: 75.53% | Val Top-1: 73.56%
-  Epoch 7/10 | Loss: 0.7068 | Acc: 78.35% | Val Top-1: 73.67%
-  Epoch 8/10 | Loss: 0.6654 | Acc: 79.15% | Val Top-1: 74.63%
-  Epoch 9/10 | Loss: 0.6302 | Acc: 80.27% | Val Top-1: 74.26%
-  Epoch 10/10 | Loss: 0.6105 | Acc: 81.12% | Val Top-1: 74.31%
-[CoOp+Adapter] Done in 194.4s | Final Loss: 0.6105 | Best Val: 74.63%
-[CoOp+Adapter] Top-1: 74.31% | Top-5: 95.64% | Params: 139,904 | 9.4s
-  ✓ CoOp+Adapter (205.0s)
-Tip-Adapter cache built: keys torch.Size([1880, 512]), values torch.Size([1880, 47])
-[Tip-Adapter] Top-1: 68.03% | Top-5: 92.34% | Params: 0 | 8.0s
-[Tip-Adapter-F] Top-1: 78.24% | Top-5: 96.44% | Params: 962,560 | 8.0s
-  ✓ Tip-Adapter + Tip-Adapter-F (183.7s)
-[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
-  Epoch 1/5 | Loss: 1.5873 | Acc: 53.24% | Val Top-1: 54.89%
-  Epoch 2/5 | Loss: 1.4458 | Acc: 56.81% | Val Top-1: 61.17%
-  Epoch 3/5 | Loss: 1.1784 | Acc: 64.57% | Val Top-1: 63.56%
-  Epoch 4/5 | Loss: 1.0225 | Acc: 69.73% | Val Top-1: 65.64%
-  Epoch 5/5 | Loss: 0.9441 | Acc: 71.97% | Val Top-1: 65.90%
-[LoRA] Done in 103.0s | Final Loss: 0.9441 | Best Val: 65.90%
-[LoRA] Top-1: 65.90% | Top-5: 92.13% | Params: 368,640 | 9.4s
-  ✓ LoRA (113.7s)
+  Epoch 1/10 | Loss: 2.4068 | Acc: 38.03% | Val Top-1: 44.84%
+  Epoch 2/10 | Loss: 1.7585 | Acc: 52.39% | Val Top-1: 61.70%
+  Epoch 3/10 | Loss: 1.2424 | Acc: 60.90% | Val Top-1: 64.36%
+  Epoch 4/10 | Loss: 1.0502 | Acc: 69.02% | Val Top-1: 67.34%
+  Epoch 5/10 | Loss: 0.8998 | Acc: 71.54% | Val Top-1: 69.68%
+  Epoch 6/10 | Loss: 0.7915 | Acc: 74.60% | Val Top-1: 70.48%
+  Epoch 7/10 | Loss: 0.7266 | Acc: 77.26% | Val Top-1: 71.12%
+  Epoch 8/10 | Loss: 0.6519 | Acc: 78.99% | Val Top-1: 70.90%
+  Epoch 9/10 | Loss: 0.6103 | Acc: 79.92% | Val Top-1: 71.65%
+  Epoch 10/10 | Loss: 0.5665 | Acc: 81.91% | Val Top-1: 72.45%
+[CoOp] Done in 284.8s | Final Loss: 0.5665 | Best Val: 72.45%
+[CoOp] Top-1: 72.45% | Top-5: 95.27% | Params: 8,192 | 19.2s
+  ✓ CoOp seed=0 (305.2s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.6327 | Acc: 51.20% | Val Top-1: 54.95%
+  Epoch 2/10 | Loss: 1.4278 | Acc: 57.98% | Val Top-1: 65.16%
+  Epoch 3/10 | Loss: 1.0693 | Acc: 66.62% | Val Top-1: 69.31%
+  Epoch 4/10 | Loss: 0.7763 | Acc: 76.20% | Val Top-1: 71.86%
+  Epoch 5/10 | Loss: 0.5682 | Acc: 83.91% | Val Top-1: 72.77%
+  Epoch 6/10 | Loss: 0.4289 | Acc: 89.10% | Val Top-1: 73.19%
+  Epoch 7/10 | Loss: 0.3367 | Acc: 92.02% | Val Top-1: 74.26%
+  Epoch 8/10 | Loss: 0.2798 | Acc: 94.15% | Val Top-1: 73.83%
+  Epoch 9/10 | Loss: 0.2520 | Acc: 95.08% | Val Top-1: 74.31%
+  Epoch 10/10 | Loss: 0.2379 | Acc: 95.88% | Val Top-1: 74.31%
+[CLIP-Adapter] Done in 265.1s | Final Loss: 0.2379 | Best Val: 74.31%
+[CLIP-Adapter] Top-1: 74.31% | Top-5: 95.48% | Params: 131,712 | 17.9s
+  ✓ CLIP-Adapter seed=0 (284.1s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 2.5170 | Acc: 36.57% | Val Top-1: 39.15%
+  Epoch 2/10 | Loss: 1.7323 | Acc: 51.99% | Val Top-1: 63.62%
+  Epoch 3/10 | Loss: 1.1530 | Acc: 65.43% | Val Top-1: 67.71%
+  Epoch 4/10 | Loss: 0.8022 | Acc: 74.20% | Val Top-1: 72.07%
+  Epoch 5/10 | Loss: 0.5788 | Acc: 83.24% | Val Top-1: 73.35%
+  Epoch 6/10 | Loss: 0.3750 | Acc: 89.36% | Val Top-1: 74.52%
+  Epoch 7/10 | Loss: 0.2455 | Acc: 93.62% | Val Top-1: 74.26%
+  Epoch 8/10 | Loss: 0.1725 | Acc: 95.88% | Val Top-1: 74.20%
+  Epoch 9/10 | Loss: 0.1317 | Acc: 97.74% | Val Top-1: 74.36%
+  Epoch 10/10 | Loss: 0.1134 | Acc: 98.40% | Val Top-1: 74.15%
+[CoOp+Adapter] Done in 288.8s | Final Loss: 0.1134 | Best Val: 74.52%
+[CoOp+Adapter] Top-1: 74.15% | Top-5: 95.74% | Params: 139,904 | 17.7s
+  ✓ CoOp+Adapter seed=0 (307.7s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.6345 | Acc: 51.20% | Val Top-1: 54.89%
+  Epoch 2/10 | Loss: 1.5186 | Acc: 53.59% | Val Top-1: 58.35%
+  Epoch 3/10 | Loss: 1.2455 | Acc: 62.10% | Val Top-1: 61.22%
+  Epoch 4/10 | Loss: 1.0479 | Acc: 67.95% | Val Top-1: 63.14%
+  Epoch 5/10 | Loss: 0.8951 | Acc: 73.54% | Val Top-1: 64.52%
+  Epoch 6/10 | Loss: 0.7758 | Acc: 76.60% | Val Top-1: 65.53%
+  Epoch 7/10 | Loss: 0.6854 | Acc: 79.79% | Val Top-1: 66.22%
+  Epoch 8/10 | Loss: 0.6266 | Acc: 83.11% | Val Top-1: 66.49%
+  Epoch 9/10 | Loss: 0.5928 | Acc: 84.44% | Val Top-1: 66.81%
+  Epoch 10/10 | Loss: 0.5779 | Acc: 85.64% | Val Top-1: 66.65%
+[LoRA] Done in 290.0s | Final Loss: 0.5779 | Best Val: 66.81%
+[LoRA] Top-1: 66.65% | Top-5: 91.81% | Params: 368,640 | 17.3s
+  ✓ LoRA seed=0 (308.5s)
+[few_shot] 16-shot support set: 752 images across 47 classes (seed=0).
+Tip-Adapter cache built: keys torch.Size([752, 512]), values torch.Size([752, 47])
+[Tip-Adapter] Top-1: 62.07% | Top-5: 90.21% | Params: 0 | 16.5s
+[Tip-Adapter-F] Top-1: 73.46% | Top-5: 94.41% | Params: 385,024 | 17.3s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=0 (124.1s)
 
 ######################################################################
 #  DATASET: Flowers102
 ######################################################################
-Downloading https://thor.robots.ox.ac.uk/flowers/102/102flowers.tgz to /home/marco/APAI_exam/data/flowers-102/102flowers.tgz
-100%|████████████████████████████████████████████████████████████████████████████████| 345M/345M [17:16<00:00, 333kB/s]
-Extracting /home/marco/APAI_exam/data/flowers-102/102flowers.tgz to /home/marco/APAI_exam/data/flowers-102
-Downloading https://thor.robots.ox.ac.uk/flowers/102/imagelabels.mat to /home/marco/APAI_exam/data/flowers-102/imagelabels.mat
-100%|██████████████████████████████████████████████████████████████████████████████████| 502/502 [00:00<00:00, 381kB/s]
-Downloading https://thor.robots.ox.ac.uk/flowers/102/setid.mat to /home/marco/APAI_exam/data/flowers-102/setid.mat
-100%|█████████████████████████████████████████████████████████████████████████████| 15.0k/15.0k [00:00<00:00, 22.4MB/s]
-  Classes: 102  |  Train: 1020  |  Test: 6149
+Downloading https://thor.robots.ox.ac.uk/flowers/102/102flowers.tgz to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/flowers-102/102flowers.tgz
+100%|████████████████████████████████████████████████████████████████████████████████| 345M/345M [08:17<00:00, 693kB/s]
+Extracting /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/flowers-102/102flowers.tgz to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/flowers-102
+Downloading https://thor.robots.ox.ac.uk/flowers/102/imagelabels.mat to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/flowers-102/imagelabels.mat
+100%|██████████████████████████████████████████████████████████████████████████████████| 502/502 [00:00<00:00, 620kB/s]
+Downloading https://thor.robots.ox.ac.uk/flowers/102/setid.mat to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/data/flowers-102/setid.mat
+100%|█████████████████████████████████████████████████████████████████████████████| 15.0k/15.0k [00:00<00:00, 15.4MB/s]
+[few_shot] Warning: class 0 has only 10 samples, requested 16.
+[few_shot] Warning: class 1 has only 10 samples, requested 16.
+[few_shot] Warning: class 2 has only 10 samples, requested 16.
+[few_shot] Warning: class 3 has only 10 samples, requested 16.
+[few_shot] Warning: class 4 has only 10 samples, requested 16.
+[few_shot] Warning: class 5 has only 10 samples, requested 16.
+[few_shot] Warning: class 6 has only 10 samples, requested 16.
+[few_shot] Warning: class 7 has only 10 samples, requested 16.
+[few_shot] Warning: class 8 has only 10 samples, requested 16.
+[few_shot] Warning: class 9 has only 10 samples, requested 16.
+[few_shot] Warning: class 10 has only 10 samples, requested 16.
+[few_shot] Warning: class 11 has only 10 samples, requested 16.
+[few_shot] Warning: class 12 has only 10 samples, requested 16.
+[few_shot] Warning: class 13 has only 10 samples, requested 16.
+[few_shot] Warning: class 14 has only 10 samples, requested 16.
+[few_shot] Warning: class 15 has only 10 samples, requested 16.
+[few_shot] Warning: class 16 has only 10 samples, requested 16.
+[few_shot] Warning: class 17 has only 10 samples, requested 16.
+[few_shot] Warning: class 18 has only 10 samples, requested 16.
+[few_shot] Warning: class 19 has only 10 samples, requested 16.
+[few_shot] Warning: class 20 has only 10 samples, requested 16.
+[few_shot] Warning: class 21 has only 10 samples, requested 16.
+[few_shot] Warning: class 22 has only 10 samples, requested 16.
+[few_shot] Warning: class 23 has only 10 samples, requested 16.
+[few_shot] Warning: class 24 has only 10 samples, requested 16.
+[few_shot] Warning: class 25 has only 10 samples, requested 16.
+[few_shot] Warning: class 26 has only 10 samples, requested 16.
+[few_shot] Warning: class 27 has only 10 samples, requested 16.
+[few_shot] Warning: class 28 has only 10 samples, requested 16.
+[few_shot] Warning: class 29 has only 10 samples, requested 16.
+[few_shot] Warning: class 30 has only 10 samples, requested 16.
+[few_shot] Warning: class 31 has only 10 samples, requested 16.
+[few_shot] Warning: class 32 has only 10 samples, requested 16.
+[few_shot] Warning: class 33 has only 10 samples, requested 16.
+[few_shot] Warning: class 34 has only 10 samples, requested 16.
+[few_shot] Warning: class 35 has only 10 samples, requested 16.
+[few_shot] Warning: class 36 has only 10 samples, requested 16.
+[few_shot] Warning: class 37 has only 10 samples, requested 16.
+[few_shot] Warning: class 38 has only 10 samples, requested 16.
+[few_shot] Warning: class 39 has only 10 samples, requested 16.
+[few_shot] Warning: class 40 has only 10 samples, requested 16.
+[few_shot] Warning: class 41 has only 10 samples, requested 16.
+[few_shot] Warning: class 42 has only 10 samples, requested 16.
+[few_shot] Warning: class 43 has only 10 samples, requested 16.
+[few_shot] Warning: class 44 has only 10 samples, requested 16.
+[few_shot] Warning: class 45 has only 10 samples, requested 16.
+[few_shot] Warning: class 46 has only 10 samples, requested 16.
+[few_shot] Warning: class 47 has only 10 samples, requested 16.
+[few_shot] Warning: class 48 has only 10 samples, requested 16.
+[few_shot] Warning: class 49 has only 10 samples, requested 16.
+[few_shot] Warning: class 50 has only 10 samples, requested 16.
+[few_shot] Warning: class 51 has only 10 samples, requested 16.
+[few_shot] Warning: class 52 has only 10 samples, requested 16.
+[few_shot] Warning: class 53 has only 10 samples, requested 16.
+[few_shot] Warning: class 54 has only 10 samples, requested 16.
+[few_shot] Warning: class 55 has only 10 samples, requested 16.
+[few_shot] Warning: class 56 has only 10 samples, requested 16.
+[few_shot] Warning: class 57 has only 10 samples, requested 16.
+[few_shot] Warning: class 58 has only 10 samples, requested 16.
+[few_shot] Warning: class 59 has only 10 samples, requested 16.
+[few_shot] Warning: class 60 has only 10 samples, requested 16.
+[few_shot] Warning: class 61 has only 10 samples, requested 16.
+[few_shot] Warning: class 62 has only 10 samples, requested 16.
+[few_shot] Warning: class 63 has only 10 samples, requested 16.
+[few_shot] Warning: class 64 has only 10 samples, requested 16.
+[few_shot] Warning: class 65 has only 10 samples, requested 16.
+[few_shot] Warning: class 66 has only 10 samples, requested 16.
+[few_shot] Warning: class 67 has only 10 samples, requested 16.
+[few_shot] Warning: class 68 has only 10 samples, requested 16.
+[few_shot] Warning: class 69 has only 10 samples, requested 16.
+[few_shot] Warning: class 70 has only 10 samples, requested 16.
+[few_shot] Warning: class 71 has only 10 samples, requested 16.
+[few_shot] Warning: class 72 has only 10 samples, requested 16.
+[few_shot] Warning: class 73 has only 10 samples, requested 16.
+[few_shot] Warning: class 74 has only 10 samples, requested 16.
+[few_shot] Warning: class 75 has only 10 samples, requested 16.
+[few_shot] Warning: class 76 has only 10 samples, requested 16.
+[few_shot] Warning: class 77 has only 10 samples, requested 16.
+[few_shot] Warning: class 78 has only 10 samples, requested 16.
+[few_shot] Warning: class 79 has only 10 samples, requested 16.
+[few_shot] Warning: class 80 has only 10 samples, requested 16.
+[few_shot] Warning: class 81 has only 10 samples, requested 16.
+[few_shot] Warning: class 82 has only 10 samples, requested 16.
+[few_shot] Warning: class 83 has only 10 samples, requested 16.
+[few_shot] Warning: class 84 has only 10 samples, requested 16.
+[few_shot] Warning: class 85 has only 10 samples, requested 16.
+[few_shot] Warning: class 86 has only 10 samples, requested 16.
+[few_shot] Warning: class 87 has only 10 samples, requested 16.
+[few_shot] Warning: class 88 has only 10 samples, requested 16.
+[few_shot] Warning: class 89 has only 10 samples, requested 16.
+[few_shot] Warning: class 90 has only 10 samples, requested 16.
+[few_shot] Warning: class 91 has only 10 samples, requested 16.
+[few_shot] Warning: class 92 has only 10 samples, requested 16.
+[few_shot] Warning: class 93 has only 10 samples, requested 16.
+[few_shot] Warning: class 94 has only 10 samples, requested 16.
+[few_shot] Warning: class 95 has only 10 samples, requested 16.
+[few_shot] Warning: class 96 has only 10 samples, requested 16.
+[few_shot] Warning: class 97 has only 10 samples, requested 16.
+[few_shot] Warning: class 98 has only 10 samples, requested 16.
+[few_shot] Warning: class 99 has only 10 samples, requested 16.
+[few_shot] Warning: class 100 has only 10 samples, requested 16.
+[few_shot] Warning: class 101 has only 10 samples, requested 16.
+[few_shot] 16-shot support set: 1020 images across 102 classes (seed=0).
+  Classes: 102  |  Train: 1020 (16-shot, of 1020)  |  Test: 6149
 
---- Baselines (Flowers102) ---
-[ZeroShot] Top-1: 71.46% | Top-5: 87.36% | Params: 0 | 26.5s
-  ✓ ZeroShot (26.5s)
-[ZeroShot-Ensemble] Top-1: 71.93% | Top-5: 86.91% | Params: 0 | 24.6s
-  ✓ ZeroShot-Ensemble (26.2s)
+--- Training-free baselines (Flowers102) ---
+[ZeroShot] Top-1: 71.46% | Top-5: 87.36% | Params: 0 | 54.6s
+  ✓ ZeroShot (54.7s)
+[ZeroShot-Ensemble] Top-1: 71.93% | Top-5: 86.91% | Params: 0 | 52.8s
+  ✓ ZeroShot-Ensemble (54.2s)
+[OptimalTransport] Top-1: 19.06% | Top-5: 43.02% | Params: 0 | 326.9s
+  ✓ OptimalTransport (327.0s)
 [Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.0s finished
-[LinearProbe] Top-1: 86.97% | Top-5: 97.04% | Params: 52,326 | 25.0s
-  ✓ LinearProbe (29.5s)
-[OptimalTransport] Top-1: 19.06% | Top-5: 43.02% | Params: 0 | 306.9s
-  ✓ OptimalTransport (307.1s)
+[LinearProbe] Top-1: 86.97% | Top-5: 97.04% | Params: 52,326 | 51.5s
+  ✓ LinearProbe seed=0 (61.9s)
 
---- Trainable methods (Flowers102) ---
+--- Trainable methods (Flowers102) | 10 epochs | seeds [0] ---
 [CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
 /home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
   warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
-  Epoch 1/10 | Loss: 1.8900 | Acc: 56.08% | Val Top-1: 63.33%
-  Epoch 2/10 | Loss: 1.4145 | Acc: 63.92% | Val Top-1: 71.46%
-  Epoch 3/10 | Loss: 1.1242 | Acc: 70.98% | Val Top-1: 72.68%
-  Epoch 4/10 | Loss: 0.9954 | Acc: 74.31% | Val Top-1: 74.63%
-  Epoch 5/10 | Loss: 0.8639 | Acc: 75.59% | Val Top-1: 77.05%
-  Epoch 6/10 | Loss: 0.7310 | Acc: 79.31% | Val Top-1: 79.28%
-  Epoch 7/10 | Loss: 0.6372 | Acc: 81.08% | Val Top-1: 80.22%
-  Epoch 8/10 | Loss: 0.5595 | Acc: 84.22% | Val Top-1: 81.90%
-  Epoch 9/10 | Loss: 0.5102 | Acc: 85.59% | Val Top-1: 82.05%
-  Epoch 10/10 | Loss: 0.4924 | Acc: 86.47% | Val Top-1: 82.35%
-[CoOp] Done in 386.4s | Final Loss: 0.4924 | Best Val: 82.35%
-[CoOp] Top-1: 82.35% | Top-5: 96.75% | Params: 8,192 | 31.7s
-  ✓ CoOp (419.4s)
-[CLIP-Adapter] Training 131,712 params | 5 epochs | LR=0.001 | adamw
-  Epoch 1/5 | Loss: 1.3007 | Acc: 69.41% | Val Top-1: 71.56%
-  Epoch 2/5 | Loss: 1.1343 | Acc: 70.49% | Val Top-1: 74.71%
-  Epoch 3/5 | Loss: 0.8124 | Acc: 78.24% | Val Top-1: 79.49%
-  Epoch 4/5 | Loss: 0.5872 | Acc: 83.63% | Val Top-1: 82.86%
-  Epoch 5/5 | Loss: 0.4899 | Acc: 87.35% | Val Top-1: 83.88%
-[CLIP-Adapter] Done in 184.9s | Final Loss: 0.4899 | Best Val: 83.88%
-[CLIP-Adapter] Top-1: 83.88% | Top-5: 96.81% | Params: 131,712 | 31.8s
-  ✓ CLIP-Adapter (218.0s)
-[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.002 | sgd
-  Epoch 1/10 | Loss: 2.9053 | Acc: 37.65% | Val Top-1: 57.34%
-  Epoch 2/10 | Loss: 1.4911 | Acc: 62.55% | Val Top-1: 66.45%
-  Epoch 3/10 | Loss: 1.2239 | Acc: 68.43% | Val Top-1: 69.31%
-  Epoch 4/10 | Loss: 1.1032 | Acc: 71.27% | Val Top-1: 71.91%
-  Epoch 5/10 | Loss: 1.0167 | Acc: 72.84% | Val Top-1: 73.20%
-  Epoch 6/10 | Loss: 0.9498 | Acc: 75.00% | Val Top-1: 74.09%
-  Epoch 7/10 | Loss: 0.8858 | Acc: 76.27% | Val Top-1: 75.07%
-  Epoch 8/10 | Loss: 0.8495 | Acc: 77.16% | Val Top-1: 75.88%
-  Epoch 9/10 | Loss: 0.8188 | Acc: 78.53% | Val Top-1: 76.26%
-  Epoch 10/10 | Loss: 0.8064 | Acc: 78.73% | Val Top-1: 76.32%
-[CoOp+Adapter] Done in 384.5s | Final Loss: 0.8064 | Best Val: 76.32%
-[CoOp+Adapter] Top-1: 76.32% | Top-5: 92.05% | Params: 139,904 | 30.6s
-  ✓ CoOp+Adapter (413.9s)
+  Epoch 1/10 | Loss: 1.8489 | Acc: 56.47% | Val Top-1: 65.73%
+  Epoch 2/10 | Loss: 1.2108 | Acc: 70.88% | Val Top-1: 73.91%
+  Epoch 3/10 | Loss: 0.9274 | Acc: 77.45% | Val Top-1: 78.96%
+  Epoch 4/10 | Loss: 0.7506 | Acc: 79.61% | Val Top-1: 82.05%
+  Epoch 5/10 | Loss: 0.5524 | Acc: 85.88% | Val Top-1: 84.26%
+  Epoch 6/10 | Loss: 0.4304 | Acc: 87.65% | Val Top-1: 86.03%
+  Epoch 7/10 | Loss: 0.3266 | Acc: 91.27% | Val Top-1: 86.96%
+  Epoch 8/10 | Loss: 0.2792 | Acc: 93.53% | Val Top-1: 88.10%
+  Epoch 9/10 | Loss: 0.2352 | Acc: 95.59% | Val Top-1: 88.70%
+  Epoch 10/10 | Loss: 0.2206 | Acc: 96.37% | Val Top-1: 88.71%
+[CoOp] Done in 705.1s | Final Loss: 0.2206 | Best Val: 88.71%
+[CoOp] Top-1: 88.71% | Top-5: 98.65% | Params: 8,192 | 55.7s
+  ✓ CoOp seed=0 (762.0s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.2988 | Acc: 69.51% | Val Top-1: 71.59%
+  Epoch 2/10 | Loss: 1.1080 | Acc: 69.80% | Val Top-1: 78.03%
+  Epoch 3/10 | Loss: 0.6541 | Acc: 82.25% | Val Top-1: 83.90%
+  Epoch 4/10 | Loss: 0.3879 | Acc: 90.98% | Val Top-1: 88.42%
+  Epoch 5/10 | Loss: 0.2484 | Acc: 94.41% | Val Top-1: 88.89%
+  Epoch 6/10 | Loss: 0.1645 | Acc: 97.55% | Val Top-1: 90.81%
+  Epoch 7/10 | Loss: 0.1152 | Acc: 98.73% | Val Top-1: 91.43%
+  Epoch 8/10 | Loss: 0.0908 | Acc: 99.02% | Val Top-1: 91.48%
+  Epoch 9/10 | Loss: 0.0778 | Acc: 99.51% | Val Top-1: 91.67%
+  Epoch 10/10 | Loss: 0.0728 | Acc: 99.51% | Val Top-1: 91.72%
+[CLIP-Adapter] Done in 683.6s | Final Loss: 0.0728 | Best Val: 91.72%
+[CLIP-Adapter] Top-1: 91.72% | Top-5: 98.75% | Params: 131,712 | 57.8s
+  ✓ CLIP-Adapter seed=0 (742.6s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 2.6379 | Acc: 43.14% | Val Top-1: 56.97%
+  Epoch 2/10 | Loss: 1.3299 | Acc: 65.10% | Val Top-1: 75.75%
+  Epoch 3/10 | Loss: 0.7252 | Acc: 80.00% | Val Top-1: 80.42%
+  Epoch 4/10 | Loss: 0.4344 | Acc: 88.14% | Val Top-1: 88.24%
+  Epoch 5/10 | Loss: 0.2620 | Acc: 93.33% | Val Top-1: 88.34%
+  Epoch 6/10 | Loss: 0.1539 | Acc: 96.86% | Val Top-1: 90.89%
+  Epoch 7/10 | Loss: 0.0978 | Acc: 99.02% | Val Top-1: 91.15%
+  Epoch 8/10 | Loss: 0.0698 | Acc: 99.61% | Val Top-1: 91.38%
+  Epoch 9/10 | Loss: 0.0594 | Acc: 99.71% | Val Top-1: 91.49%
+  Epoch 10/10 | Loss: 0.0551 | Acc: 99.80% | Val Top-1: 91.49%
+[CoOp+Adapter] Done in 712.6s | Final Loss: 0.0551 | Best Val: 91.49%
+[CoOp+Adapter] Top-1: 91.49% | Top-5: 98.75% | Params: 139,904 | 57.6s
+  ✓ CoOp+Adapter seed=0 (771.3s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.3002 | Acc: 69.51% | Val Top-1: 71.56%
+  Epoch 2/10 | Loss: 1.1426 | Acc: 72.06% | Val Top-1: 73.10%
+  Epoch 3/10 | Loss: 0.8564 | Acc: 78.82% | Val Top-1: 75.28%
+  Epoch 4/10 | Loss: 0.6466 | Acc: 83.14% | Val Top-1: 77.02%
+  Epoch 5/10 | Loss: 0.4822 | Acc: 87.25% | Val Top-1: 78.40%
+  Epoch 6/10 | Loss: 0.3601 | Acc: 91.76% | Val Top-1: 79.53%
+  Epoch 7/10 | Loss: 0.2837 | Acc: 94.61% | Val Top-1: 80.26%
+  Epoch 8/10 | Loss: 0.2414 | Acc: 95.29% | Val Top-1: 80.84%
+  Epoch 9/10 | Loss: 0.2186 | Acc: 95.98% | Val Top-1: 81.18%
+  Epoch 10/10 | Loss: 0.2092 | Acc: 96.27% | Val Top-1: 81.25%
+[LoRA] Done in 689.4s | Final Loss: 0.2092 | Best Val: 81.25%
+[LoRA] Top-1: 81.25% | Top-5: 95.46% | Params: 368,640 | 57.3s
+  ✓ LoRA seed=0 (747.9s)
+[few_shot] Warning: class 0 has only 10 samples, requested 16.
+[few_shot] Warning: class 1 has only 10 samples, requested 16.
+[few_shot] Warning: class 2 has only 10 samples, requested 16.
+[few_shot] Warning: class 3 has only 10 samples, requested 16.
+[few_shot] Warning: class 4 has only 10 samples, requested 16.
+[few_shot] Warning: class 5 has only 10 samples, requested 16.
+[few_shot] Warning: class 6 has only 10 samples, requested 16.
+[few_shot] Warning: class 7 has only 10 samples, requested 16.
+[few_shot] Warning: class 8 has only 10 samples, requested 16.
+[few_shot] Warning: class 9 has only 10 samples, requested 16.
+[few_shot] Warning: class 10 has only 10 samples, requested 16.
+[few_shot] Warning: class 11 has only 10 samples, requested 16.
+[few_shot] Warning: class 12 has only 10 samples, requested 16.
+[few_shot] Warning: class 13 has only 10 samples, requested 16.
+[few_shot] Warning: class 14 has only 10 samples, requested 16.
+[few_shot] Warning: class 15 has only 10 samples, requested 16.
+[few_shot] Warning: class 16 has only 10 samples, requested 16.
+[few_shot] Warning: class 17 has only 10 samples, requested 16.
+[few_shot] Warning: class 18 has only 10 samples, requested 16.
+[few_shot] Warning: class 19 has only 10 samples, requested 16.
+[few_shot] Warning: class 20 has only 10 samples, requested 16.
+[few_shot] Warning: class 21 has only 10 samples, requested 16.
+[few_shot] Warning: class 22 has only 10 samples, requested 16.
+[few_shot] Warning: class 23 has only 10 samples, requested 16.
+[few_shot] Warning: class 24 has only 10 samples, requested 16.
+[few_shot] Warning: class 25 has only 10 samples, requested 16.
+[few_shot] Warning: class 26 has only 10 samples, requested 16.
+[few_shot] Warning: class 27 has only 10 samples, requested 16.
+[few_shot] Warning: class 28 has only 10 samples, requested 16.
+[few_shot] Warning: class 29 has only 10 samples, requested 16.
+[few_shot] Warning: class 30 has only 10 samples, requested 16.
+[few_shot] Warning: class 31 has only 10 samples, requested 16.
+[few_shot] Warning: class 32 has only 10 samples, requested 16.
+[few_shot] Warning: class 33 has only 10 samples, requested 16.
+[few_shot] Warning: class 34 has only 10 samples, requested 16.
+[few_shot] Warning: class 35 has only 10 samples, requested 16.
+[few_shot] Warning: class 36 has only 10 samples, requested 16.
+[few_shot] Warning: class 37 has only 10 samples, requested 16.
+[few_shot] Warning: class 38 has only 10 samples, requested 16.
+[few_shot] Warning: class 39 has only 10 samples, requested 16.
+[few_shot] Warning: class 40 has only 10 samples, requested 16.
+[few_shot] Warning: class 41 has only 10 samples, requested 16.
+[few_shot] Warning: class 42 has only 10 samples, requested 16.
+[few_shot] Warning: class 43 has only 10 samples, requested 16.
+[few_shot] Warning: class 44 has only 10 samples, requested 16.
+[few_shot] Warning: class 45 has only 10 samples, requested 16.
+[few_shot] Warning: class 46 has only 10 samples, requested 16.
+[few_shot] Warning: class 47 has only 10 samples, requested 16.
+[few_shot] Warning: class 48 has only 10 samples, requested 16.
+[few_shot] Warning: class 49 has only 10 samples, requested 16.
+[few_shot] Warning: class 50 has only 10 samples, requested 16.
+[few_shot] Warning: class 51 has only 10 samples, requested 16.
+[few_shot] Warning: class 52 has only 10 samples, requested 16.
+[few_shot] Warning: class 53 has only 10 samples, requested 16.
+[few_shot] Warning: class 54 has only 10 samples, requested 16.
+[few_shot] Warning: class 55 has only 10 samples, requested 16.
+[few_shot] Warning: class 56 has only 10 samples, requested 16.
+[few_shot] Warning: class 57 has only 10 samples, requested 16.
+[few_shot] Warning: class 58 has only 10 samples, requested 16.
+[few_shot] Warning: class 59 has only 10 samples, requested 16.
+[few_shot] Warning: class 60 has only 10 samples, requested 16.
+[few_shot] Warning: class 61 has only 10 samples, requested 16.
+[few_shot] Warning: class 62 has only 10 samples, requested 16.
+[few_shot] Warning: class 63 has only 10 samples, requested 16.
+[few_shot] Warning: class 64 has only 10 samples, requested 16.
+[few_shot] Warning: class 65 has only 10 samples, requested 16.
+[few_shot] Warning: class 66 has only 10 samples, requested 16.
+[few_shot] Warning: class 67 has only 10 samples, requested 16.
+[few_shot] Warning: class 68 has only 10 samples, requested 16.
+[few_shot] Warning: class 69 has only 10 samples, requested 16.
+[few_shot] Warning: class 70 has only 10 samples, requested 16.
+[few_shot] Warning: class 71 has only 10 samples, requested 16.
+[few_shot] Warning: class 72 has only 10 samples, requested 16.
+[few_shot] Warning: class 73 has only 10 samples, requested 16.
+[few_shot] Warning: class 74 has only 10 samples, requested 16.
+[few_shot] Warning: class 75 has only 10 samples, requested 16.
+[few_shot] Warning: class 76 has only 10 samples, requested 16.
+[few_shot] Warning: class 77 has only 10 samples, requested 16.
+[few_shot] Warning: class 78 has only 10 samples, requested 16.
+[few_shot] Warning: class 79 has only 10 samples, requested 16.
+[few_shot] Warning: class 80 has only 10 samples, requested 16.
+[few_shot] Warning: class 81 has only 10 samples, requested 16.
+[few_shot] Warning: class 82 has only 10 samples, requested 16.
+[few_shot] Warning: class 83 has only 10 samples, requested 16.
+[few_shot] Warning: class 84 has only 10 samples, requested 16.
+[few_shot] Warning: class 85 has only 10 samples, requested 16.
+[few_shot] Warning: class 86 has only 10 samples, requested 16.
+[few_shot] Warning: class 87 has only 10 samples, requested 16.
+[few_shot] Warning: class 88 has only 10 samples, requested 16.
+[few_shot] Warning: class 89 has only 10 samples, requested 16.
+[few_shot] Warning: class 90 has only 10 samples, requested 16.
+[few_shot] Warning: class 91 has only 10 samples, requested 16.
+[few_shot] Warning: class 92 has only 10 samples, requested 16.
+[few_shot] Warning: class 93 has only 10 samples, requested 16.
+[few_shot] Warning: class 94 has only 10 samples, requested 16.
+[few_shot] Warning: class 95 has only 10 samples, requested 16.
+[few_shot] Warning: class 96 has only 10 samples, requested 16.
+[few_shot] Warning: class 97 has only 10 samples, requested 16.
+[few_shot] Warning: class 98 has only 10 samples, requested 16.
+[few_shot] Warning: class 99 has only 10 samples, requested 16.
+[few_shot] Warning: class 100 has only 10 samples, requested 16.
+[few_shot] Warning: class 101 has only 10 samples, requested 16.
+[few_shot] 16-shot support set: 1020 images across 102 classes (seed=0).
 Tip-Adapter cache built: keys torch.Size([1020, 512]), values torch.Size([1020, 102])
-[Tip-Adapter] Top-1: 81.17% | Top-5: 91.90% | Params: 0 | 29.2s
-[Tip-Adapter-F] Top-1: 94.32% | Top-5: 99.04% | Params: 522,240 | 26.6s
-  ✓ Tip-Adapter + Tip-Adapter-F (147.1s)
-[LoRA] Training 368,640 params | 5 epochs | LR=0.0001 | adamw
-  Epoch 1/5 | Loss: 1.3010 | Acc: 69.41% | Val Top-1: 71.52%
-  Epoch 2/5 | Loss: 1.1583 | Acc: 71.18% | Val Top-1: 71.74%
-  Epoch 3/5 | Loss: 0.9630 | Acc: 76.27% | Val Top-1: 73.43%
-  Epoch 4/5 | Loss: 0.8275 | Acc: 79.31% | Val Top-1: 74.22%
-  Epoch 5/5 | Loss: 0.7623 | Acc: 80.59% | Val Top-1: 74.47%
-[LoRA] Done in 188.8s | Final Loss: 0.7623 | Best Val: 74.47%
-[LoRA] Top-1: 74.47% | Top-5: 90.88% | Params: 368,640 | 32.0s
-  ✓ LoRA (222.2s)
+[Tip-Adapter] Top-1: 81.17% | Top-5: 91.90% | Params: 0 | 51.3s
+[Tip-Adapter-F] Top-1: 94.02% | Top-5: 98.98% | Params: 522,240 | 50.1s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=0 (208.0s)
 
-=======================================================================
-  UNIFIED RESULTS TABLE
-=======================================================================
-| Method           |    EuroSAT |        DTD | Flowers102 |    Params |
-|------------------|------------|------------|------------|-----------|
-| ZeroShot         |     46.35% |     54.89% |     71.46% |         0 |
-| ZeroShot-Ensemble |     50.61% |     57.34% |     71.93% |         0 |
-| LinearProbe      |     93.81% |     70.90% |     86.97% |    52,326 |
-| OptimalTransport |     20.31% |     23.30% |     19.06% |         0 |
-| CoOp             |     95.37% |     73.46% |     82.35% |     8,192 |
-| CLIP-Adapter     |     96.59% |     75.21% |     83.88% |   131,712 |
-| CoOp+Adapter     |     95.44% |     74.31% |     76.32% |   139,904 |
-| Tip-Adapter      |     76.13% |     68.03% |     81.17% |         0 |
-| Tip-Adapter-F    |     96.56% |     78.24% |     94.32% |   522,240 |
-| LoRA             |     98.17% |     65.90% |     74.47% |   368,640 |
-=======================================================================
+  Protocol: 16-shot | epochs=10 | seeds=[0] | eval on the full test split
 
-[Results] Saved to /home/marco/APAI_exam/plots/unified_results.json
-[Plot] Saved: /home/marco/APAI_exam/plots/unified_comparison.png
-[Plot] Saved: /home/marco/APAI_exam/plots/accuracy_vs_params_unified.png
-/home/marco/APAI_exam/src/run_all.py:673: MatplotlibDeprecationWarning: The get_cmap function was deprecated in Matplotlib 3.7 and will be removed in 3.11. Use ``matplotlib.colormaps[name]`` or ``matplotlib.colormaps.get_cmap()`` or ``pyplot.get_cmap()`` instead.
-  cmap = plt.cm.get_cmap("tab10" if n_classes <= 10 else "tab20", n_classes)
-[Plot] Saved: /home/marco/APAI_exam/plots/tsne_features.png
+==============================================================================
+  TOP-1 ACCURACY (%) — mean ± std over seeds
+==============================================================================
+| Method            |          EuroSAT |              DTD |       Flowers102 |
+|-------------------|------------------|------------------|------------------|
+| ZeroShot          |      46.35     |      54.89     |      71.46     |
+| ZeroShot-Ensemble |      50.61     |      57.34     |      71.93     |
+| LinearProbe       |      78.94     |      65.16     |      86.97     |
+| OptimalTransport  |      20.31     |      23.30     |      19.06     |
+| CoOp              |      75.87     |      72.45     |      88.71     |
+| CLIP-Adapter      |      81.26     |      74.31     |      91.72     |
+| CoOp+Adapter      |      81.59     |      74.15     |      91.49     |
+| Tip-Adapter       |      74.41     |      62.07     |      81.17     |
+| Tip-Adapter-F     |      86.26     |      73.46     |      94.02     |
+| LoRA              |      81.15     |      66.65     |      81.25     |
+==============================================================================
 
-[run_all] Total time: 167.1 minutes
+==============================================================================
+  TRAINABLE PARAMETERS (the CLIP backbone is frozen throughout)
+==============================================================================
+| Method            |          EuroSAT |              DTD |       Flowers102 |
+|-------------------|------------------|------------------|------------------|
+| ZeroShot          |                0 |                0 |                0 |
+| ZeroShot-Ensemble |                0 |                0 |                0 |
+| LinearProbe       |            5,130 |           24,111 |           52,326 |
+| OptimalTransport  |                0 |                0 |                0 |
+| CoOp              |            8,192 |            8,192 |            8,192 |
+| CLIP-Adapter      |          131,712 |          131,712 |          131,712 |
+| CoOp+Adapter      |          139,904 |          139,904 |          139,904 |
+| Tip-Adapter       |                0 |                0 |                0 |
+| Tip-Adapter-F     |           81,920 |          385,024 |          522,240 |
+| LoRA              |          368,640 |          368,640 |          368,640 |
+==============================================================================
+
+[Results] Saved to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/unified_results.json
+[Results] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/predictions_eurosat.npz
+[Results] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/predictions_dtd.npz
+[Results] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/predictions_flowers102.npz
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/unified_comparison.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/accuracy_vs_params_unified.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/training_cost.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/memory_vs_epochs_eurosat.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/memory_vs_epochs_dtd.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/memory_vs_epochs_flowers102.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/confusion_matrices.png
+
+============================================================
+Classification Report: ZeroShot
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.39      0.43      0.41       631
+               Forest       0.34      0.24      0.28       582
+Herbaceous Vegetation       0.86      0.01      0.02       612
+      Highway Or Road       0.52      0.53      0.53       525
+           Industrial       0.74      0.87      0.80       484
+              Pasture       0.50      0.52      0.51       396
+       Permanent Crop       0.29      0.53      0.37       506
+          Residential       0.86      0.96      0.91       606
+                River       0.38      0.35      0.36       497
+          Sea Or Lake       0.22      0.29      0.25       561
+
+             accuracy                           0.46      5400
+            macro avg       0.51      0.47      0.44      5400
+         weighted avg       0.52      0.46      0.44      5400
+
+
+============================================================
+Classification Report: ZeroShot-Ensemble
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.45      0.24      0.31       631
+               Forest       0.30      0.23      0.26       582
+Herbaceous Vegetation       1.00      0.00      0.01       612
+      Highway Or Road       0.83      0.62      0.71       525
+           Industrial       0.75      0.91      0.82       484
+              Pasture       0.65      0.57      0.61       396
+       Permanent Crop       0.35      0.73      0.47       506
+          Residential       0.91      0.95      0.93       606
+                River       0.33      0.41      0.37       497
+          Sea Or Lake       0.32      0.55      0.40       561
+
+             accuracy                           0.51      5400
+            macro avg       0.59      0.52      0.49      5400
+         weighted avg       0.59      0.51      0.48      5400
+
+
+============================================================
+Classification Report: OptimalTransport
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.00      0.00      0.00       631
+               Forest       0.30      0.02      0.04       582
+Herbaceous Vegetation       0.00      0.00      0.00       612
+      Highway Or Road       0.79      0.43      0.55       525
+           Industrial       0.00      0.00      0.00       484
+              Pasture       0.06      0.01      0.01       396
+       Permanent Crop       0.11      0.98      0.20       506
+          Residential       0.68      0.38      0.49       606
+                River       0.59      0.25      0.35       497
+          Sea Or Lake       0.75      0.01      0.01       561
+
+             accuracy                           0.20      5400
+            macro avg       0.33      0.21      0.17      5400
+         weighted avg       0.33      0.20      0.17      5400
+
+
+============================================================
+Classification Report: LinearProbe
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.84      0.78      0.81       631
+               Forest       0.63      0.68      0.65       582
+Herbaceous Vegetation       0.79      0.78      0.78       612
+      Highway Or Road       0.97      0.66      0.79       525
+           Industrial       0.83      0.98      0.90       484
+              Pasture       0.63      0.81      0.71       396
+       Permanent Crop       0.93      0.64      0.76       506
+          Residential       0.91      0.97      0.94       606
+                River       0.88      0.72      0.79       497
+          Sea Or Lake       0.65      0.86      0.74       561
+
+             accuracy                           0.79      5400
+            macro avg       0.81      0.79      0.79      5400
+         weighted avg       0.81      0.79      0.79      5400
+
+
+============================================================
+Classification Report: CoOp
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.81      0.66      0.73       631
+               Forest       0.59      0.74      0.66       582
+Herbaceous Vegetation       0.75      0.69      0.72       612
+      Highway Or Road       0.91      0.79      0.85       525
+           Industrial       0.92      0.88      0.90       484
+              Pasture       0.59      0.84      0.69       396
+       Permanent Crop       0.68      0.51      0.58       506
+          Residential       0.89      0.97      0.92       606
+                River       0.83      0.79      0.81       497
+          Sea Or Lake       0.70      0.73      0.72       561
+
+             accuracy                           0.76      5400
+            macro avg       0.77      0.76      0.76      5400
+         weighted avg       0.77      0.76      0.76      5400
+
+
+============================================================
+Classification Report: CLIP-Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.77      0.84      0.80       631
+               Forest       0.72      0.84      0.77       582
+Herbaceous Vegetation       0.80      0.78      0.79       612
+      Highway Or Road       0.89      0.80      0.84       525
+           Industrial       0.92      0.86      0.89       484
+              Pasture       0.63      0.79      0.70       396
+       Permanent Crop       0.84      0.56      0.68       506
+          Residential       0.87      0.97      0.91       606
+                River       0.88      0.77      0.82       497
+          Sea Or Lake       0.86      0.87      0.87       561
+
+             accuracy                           0.81      5400
+            macro avg       0.82      0.81      0.81      5400
+         weighted avg       0.82      0.81      0.81      5400
+
+
+============================================================
+Classification Report: CoOp+Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.85      0.73      0.78       631
+               Forest       0.70      0.82      0.76       582
+Herbaceous Vegetation       0.81      0.81      0.81       612
+      Highway Or Road       0.90      0.83      0.87       525
+           Industrial       0.92      0.87      0.89       484
+              Pasture       0.70      0.88      0.78       396
+       Permanent Crop       0.74      0.70      0.72       506
+          Residential       0.88      0.97      0.92       606
+                River       0.89      0.74      0.81       497
+          Sea Or Lake       0.81      0.83      0.82       561
+
+             accuracy                           0.82      5400
+            macro avg       0.82      0.82      0.81      5400
+         weighted avg       0.82      0.82      0.82      5400
+
+
+============================================================
+Classification Report: LoRA
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.74      0.66      0.70       631
+               Forest       0.83      0.92      0.88       582
+Herbaceous Vegetation       0.76      0.74      0.75       612
+      Highway Or Road       0.91      0.80      0.85       525
+           Industrial       0.91      0.89      0.90       484
+              Pasture       0.67      0.83      0.74       396
+       Permanent Crop       0.61      0.56      0.58       506
+          Residential       0.90      0.98      0.94       606
+                River       0.83      0.81      0.82       497
+          Sea Or Lake       0.91      0.92      0.91       561
+
+             accuracy                           0.81      5400
+            macro avg       0.81      0.81      0.81      5400
+         weighted avg       0.81      0.81      0.81      5400
+
+
+============================================================
+Classification Report: Tip-Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.84      0.84      0.84       631
+               Forest       0.55      0.76      0.64       582
+Herbaceous Vegetation       0.93      0.35      0.51       612
+      Highway Or Road       0.93      0.55      0.69       525
+           Industrial       0.83      0.88      0.85       484
+              Pasture       0.46      0.86      0.60       396
+       Permanent Crop       0.76      0.74      0.75       506
+          Residential       0.87      0.98      0.92       606
+                River       0.83      0.62      0.71       497
+          Sea Or Lake       0.79      0.89      0.84       561
+
+             accuracy                           0.74      5400
+            macro avg       0.78      0.75      0.74      5400
+         weighted avg       0.79      0.74      0.74      5400
+
+
+============================================================
+Classification Report: Tip-Adapter-F
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.87      0.92      0.90       631
+               Forest       0.76      0.84      0.80       582
+Herbaceous Vegetation       0.86      0.76      0.80       612
+      Highway Or Road       0.91      0.84      0.87       525
+           Industrial       0.94      0.92      0.93       484
+              Pasture       0.76      0.84      0.80       396
+       Permanent Crop       0.85      0.84      0.85       506
+          Residential       0.93      0.97      0.95       606
+                River       0.85      0.80      0.83       497
+          Sea Or Lake       0.91      0.89      0.90       561
+
+             accuracy                           0.86      5400
+            macro avg       0.86      0.86      0.86      5400
+         weighted avg       0.86      0.86      0.86      5400
+
+
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/per_class_accuracy.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/tsne_features.png
+
+[run_all] Total time: 134.1 minutes
 [run_all] Done.
