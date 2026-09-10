@@ -1,0 +1,473 @@
+(APAI) marco@Marco:/mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam$ python src/run_all.py --dataset eurosat --shots 0 --seeds 0 1 2 --epochs 10 --out results_eurosat_full.json
+[run_all] Device: cuda
+[run_all] Protocol: full-shot, 10 epochs for every trainable method, seeds [0, 1, 2]
+[run_all] Note: val_loader is the test set — model selection is not held out. Declare this in the report.
+
+######################################################################
+#  DATASET: EuroSAT
+######################################################################
+  Classes: 10  |  Train: 21600 (full-shot, of 21600)  |  Test: 5400
+
+--- Training-free baselines (EuroSAT) ---
+[ZeroShot] Top-1: 46.35% | Top-5: 89.67% | Params: 0 | 36.3s
+  ✓ ZeroShot (36.4s)
+[ZeroShot-Ensemble] Top-1: 50.61% | Top-5: 90.20% | Params: 0 | 37.4s
+  ✓ ZeroShot-Ensemble (37.5s)
+[OptimalTransport] Top-1: 20.31% | Top-5: 72.65% | Params: 0 | 59.7s
+  ✓ OptimalTransport (59.8s)
+[Parallel(n_jobs=1)]: Done   1 out of   1 | elapsed:    0.8s finished
+[LinearProbe] Top-1: 93.81% | Top-5: 99.98% | Params: 5,130 | 36.6s
+  ✓ LinearProbe seed=0 (186.7s)
+
+--- Trainable methods (EuroSAT) | 10 epochs | seeds [0, 1, 2] ---
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+/home/marco/miniconda3/envs/APAI/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:240: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+  Epoch 1/10 | Loss: 0.8772 | Acc: 70.00% | Val Top-1: 80.48%
+  Epoch 2/10 | Loss: 0.3538 | Acc: 88.43% | Val Top-1: 92.15%
+  Epoch 3/10 | Loss: 0.2028 | Acc: 93.59% | Val Top-1: 93.43%
+  Epoch 4/10 | Loss: 0.1767 | Acc: 94.31% | Val Top-1: 94.46%
+  Epoch 5/10 | Loss: 0.1610 | Acc: 94.86% | Val Top-1: 94.80%
+  Epoch 6/10 | Loss: 0.1499 | Acc: 95.11% | Val Top-1: 94.28%
+  Epoch 7/10 | Loss: 0.1386 | Acc: 95.46% | Val Top-1: 95.13%
+  Epoch 8/10 | Loss: 0.1300 | Acc: 95.78% | Val Top-1: 95.20%
+  Epoch 9/10 | Loss: 0.1236 | Acc: 95.91% | Val Top-1: 95.30%
+  Epoch 10/10 | Loss: 0.1197 | Acc: 96.13% | Val Top-1: 95.61%
+[CoOp] Done in 1975.6s | Final Loss: 0.1197 | Best Val: 95.61%
+[CoOp] Top-1: 95.61% | Top-5: 99.98% | Params: 8,192 | 39.3s
+  ✓ CoOp seed=0 (2020.1s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3112 | Acc: 52.26% | Val Top-1: 59.33%
+  Epoch 2/10 | Loss: 0.2335 | Acc: 92.16% | Val Top-1: 94.78%
+  Epoch 3/10 | Loss: 0.1268 | Acc: 95.62% | Val Top-1: 95.28%
+  Epoch 4/10 | Loss: 0.1022 | Acc: 96.57% | Val Top-1: 96.39%
+  Epoch 5/10 | Loss: 0.0840 | Acc: 97.14% | Val Top-1: 95.83%
+  Epoch 6/10 | Loss: 0.0767 | Acc: 97.39% | Val Top-1: 96.61%
+  Epoch 7/10 | Loss: 0.0636 | Acc: 97.88% | Val Top-1: 96.70%
+  Epoch 8/10 | Loss: 0.0556 | Acc: 98.15% | Val Top-1: 97.04%
+  Epoch 9/10 | Loss: 0.0487 | Acc: 98.40% | Val Top-1: 97.04%
+  Epoch 10/10 | Loss: 0.0453 | Acc: 98.50% | Val Top-1: 97.06%
+[CLIP-Adapter] Done in 2095.9s | Final Loss: 0.0453 | Best Val: 97.06%
+[CLIP-Adapter] Top-1: 97.06% | Top-5: 100.00% | Params: 131,712 | 43.7s
+  ✓ CLIP-Adapter seed=0 (2145.9s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 1.0490 | Acc: 62.72% | Val Top-1: 73.52%
+  Epoch 2/10 | Loss: 0.2343 | Acc: 92.22% | Val Top-1: 95.02%
+  Epoch 3/10 | Loss: 0.1278 | Acc: 95.63% | Val Top-1: 95.59%
+  Epoch 4/10 | Loss: 0.1026 | Acc: 96.50% | Val Top-1: 96.00%
+  Epoch 5/10 | Loss: 0.0873 | Acc: 96.97% | Val Top-1: 96.69%
+  Epoch 6/10 | Loss: 0.0738 | Acc: 97.38% | Val Top-1: 96.67%
+  Epoch 7/10 | Loss: 0.0628 | Acc: 97.81% | Val Top-1: 96.85%
+  Epoch 8/10 | Loss: 0.0511 | Acc: 98.32% | Val Top-1: 96.93%
+  Epoch 9/10 | Loss: 0.0434 | Acc: 98.46% | Val Top-1: 97.09%
+  Epoch 10/10 | Loss: 0.0384 | Acc: 98.69% | Val Top-1: 97.15%
+[CoOp+Adapter] Done in 2169.8s | Final Loss: 0.0384 | Best Val: 97.15%
+[CoOp+Adapter] Top-1: 97.15% | Top-5: 100.00% | Params: 139,904 | 37.0s
+  ✓ CoOp+Adapter seed=0 (2212.5s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.3113 | Acc: 52.09% | Val Top-1: 58.44%
+  Epoch 2/10 | Loss: 0.2073 | Acc: 93.56% | Val Top-1: 97.56%
+  Epoch 3/10 | Loss: 0.0664 | Acc: 97.77% | Val Top-1: 97.24%
+  Epoch 4/10 | Loss: 0.0435 | Acc: 98.54% | Val Top-1: 98.24%
+  Epoch 5/10 | Loss: 0.0305 | Acc: 99.07% | Val Top-1: 98.20%
+  Epoch 6/10 | Loss: 0.0222 | Acc: 99.32% | Val Top-1: 98.15%
+  Epoch 7/10 | Loss: 0.0158 | Acc: 99.55% | Val Top-1: 98.11%
+  Epoch 8/10 | Loss: 0.0116 | Acc: 99.68% | Val Top-1: 98.46%
+  Epoch 9/10 | Loss: 0.0090 | Acc: 99.78% | Val Top-1: 98.50%
+  Epoch 10/10 | Loss: 0.0078 | Acc: 99.84% | Val Top-1: 98.52%
+[LoRA] Done in 2132.7s | Final Loss: 0.0078 | Best Val: 98.52%
+[LoRA] Top-1: 98.52% | Top-5: 100.00% | Params: 368,640 | 36.6s
+  ✓ LoRA seed=0 (2174.4s)
+[few_shot] 16-shot support set: 160 images across 10 classes (seed=0).
+Tip-Adapter cache built: keys torch.Size([160, 512]), values torch.Size([160, 10])
+[Tip-Adapter] Top-1: 74.41% | Top-5: 98.44% | Params: 0 | 36.7s
+[Tip-Adapter-F] Top-1: 97.06% | Top-5: 100.00% | Params: 81,920 | 36.7s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=0 (1558.9s)
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+  Epoch 1/10 | Loss: 0.8629 | Acc: 71.07% | Val Top-1: 78.35%
+  Epoch 2/10 | Loss: 0.3294 | Acc: 89.18% | Val Top-1: 92.48%
+  Epoch 3/10 | Loss: 0.1976 | Acc: 93.55% | Val Top-1: 93.85%
+  Epoch 4/10 | Loss: 0.1725 | Acc: 94.44% | Val Top-1: 94.00%
+  Epoch 5/10 | Loss: 0.1589 | Acc: 94.84% | Val Top-1: 94.20%
+  Epoch 6/10 | Loss: 0.1489 | Acc: 95.18% | Val Top-1: 94.81%
+  Epoch 7/10 | Loss: 0.1378 | Acc: 95.52% | Val Top-1: 95.30%
+  Epoch 8/10 | Loss: 0.1294 | Acc: 95.89% | Val Top-1: 95.19%
+  Epoch 9/10 | Loss: 0.1236 | Acc: 96.06% | Val Top-1: 95.52%
+  Epoch 10/10 | Loss: 0.1192 | Acc: 96.19% | Val Top-1: 95.59%
+[CoOp] Done in 1922.0s | Final Loss: 0.1192 | Best Val: 95.59%
+[CoOp] Top-1: 95.59% | Top-5: 100.00% | Params: 8,192 | 35.4s
+  ✓ CoOp seed=1 (1958.7s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3200 | Acc: 51.42% | Val Top-1: 58.41%
+  Epoch 2/10 | Loss: 0.2317 | Acc: 92.37% | Val Top-1: 94.72%
+  Epoch 3/10 | Loss: 0.1284 | Acc: 95.71% | Val Top-1: 95.76%
+  Epoch 4/10 | Loss: 0.1043 | Acc: 96.52% | Val Top-1: 96.04%
+  Epoch 5/10 | Loss: 0.0879 | Acc: 96.98% | Val Top-1: 96.41%
+  Epoch 6/10 | Loss: 0.0763 | Acc: 97.45% | Val Top-1: 96.35%
+  Epoch 7/10 | Loss: 0.0647 | Acc: 97.74% | Val Top-1: 95.96%
+  Epoch 8/10 | Loss: 0.0559 | Acc: 98.06% | Val Top-1: 96.81%
+  Epoch 9/10 | Loss: 0.0493 | Acc: 98.30% | Val Top-1: 97.02%
+  Epoch 10/10 | Loss: 0.0453 | Acc: 98.54% | Val Top-1: 97.04%
+[CLIP-Adapter] Done in 1872.0s | Final Loss: 0.0453 | Best Val: 97.04%
+[CLIP-Adapter] Top-1: 97.04% | Top-5: 100.00% | Params: 131,712 | 35.3s
+  ✓ CLIP-Adapter seed=1 (1908.5s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 1.0557 | Acc: 65.18% | Val Top-1: 72.67%
+  Epoch 2/10 | Loss: 0.2337 | Acc: 92.29% | Val Top-1: 95.26%
+  Epoch 3/10 | Loss: 0.1294 | Acc: 95.55% | Val Top-1: 95.59%
+  Epoch 4/10 | Loss: 0.1067 | Acc: 96.48% | Val Top-1: 95.91%
+  Epoch 5/10 | Loss: 0.0903 | Acc: 96.88% | Val Top-1: 96.67%
+  Epoch 6/10 | Loss: 0.0755 | Acc: 97.40% | Val Top-1: 96.35%
+  Epoch 7/10 | Loss: 0.0628 | Acc: 97.86% | Val Top-1: 96.85%
+  Epoch 8/10 | Loss: 0.0523 | Acc: 98.16% | Val Top-1: 97.19%
+  Epoch 9/10 | Loss: 0.0452 | Acc: 98.40% | Val Top-1: 97.20%
+  Epoch 10/10 | Loss: 0.0400 | Acc: 98.62% | Val Top-1: 97.11%
+[CoOp+Adapter] Done in 1998.7s | Final Loss: 0.0400 | Best Val: 97.20%
+[CoOp+Adapter] Top-1: 97.11% | Top-5: 100.00% | Params: 139,904 | 40.8s
+  ✓ CoOp+Adapter seed=1 (2040.7s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.3062 | Acc: 52.18% | Val Top-1: 58.57%
+  Epoch 2/10 | Loss: 0.2156 | Acc: 93.61% | Val Top-1: 96.94%
+  Epoch 3/10 | Loss: 0.0657 | Acc: 97.83% | Val Top-1: 97.85%
+  Epoch 4/10 | Loss: 0.0445 | Acc: 98.54% | Val Top-1: 98.09%
+  Epoch 5/10 | Loss: 0.0312 | Acc: 98.98% | Val Top-1: 98.30%
+  Epoch 6/10 | Loss: 0.0226 | Acc: 99.25% | Val Top-1: 98.37%
+  Epoch 7/10 | Loss: 0.0168 | Acc: 99.53% | Val Top-1: 98.43%
+  Epoch 8/10 | Loss: 0.0124 | Acc: 99.68% | Val Top-1: 98.54%
+  Epoch 9/10 | Loss: 0.0095 | Acc: 99.76% | Val Top-1: 98.52%
+  Epoch 10/10 | Loss: 0.0083 | Acc: 99.81% | Val Top-1: 98.57%
+[LoRA] Done in 2757.8s | Final Loss: 0.0083 | Best Val: 98.57%
+[LoRA] Top-1: 98.57% | Top-5: 99.98% | Params: 368,640 | 59.2s
+  ✓ LoRA seed=1 (2818.2s)
+[few_shot] 16-shot support set: 160 images across 10 classes (seed=1).
+Tip-Adapter cache built: keys torch.Size([160, 512]), values torch.Size([160, 10])
+[Tip-Adapter] Top-1: 72.50% | Top-5: 98.56% | Params: 0 | 34.5s
+
+[Tip-Adapter-F] Top-1: 96.00% | Top-5: 100.00% | Params: 81,920 | 32.9s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=1 (1613.5s)
+[CoOp] Training 8,192 params | 10 epochs | LR=0.002 | sgd
+  Epoch 1/10 | Loss: 0.9437 | Acc: 67.13% | Val Top-1: 78.59%
+  Epoch 2/10 | Loss: 0.3268 | Acc: 89.47% | Val Top-1: 93.04%
+  Epoch 3/10 | Loss: 0.2014 | Acc: 93.65% | Val Top-1: 94.22%
+  Epoch 4/10 | Loss: 0.1725 | Acc: 94.36% | Val Top-1: 94.33%
+  Epoch 5/10 | Loss: 0.1560 | Acc: 95.01% | Val Top-1: 94.67%
+  Epoch 6/10 | Loss: 0.1463 | Acc: 95.27% | Val Top-1: 94.89%
+  Epoch 7/10 | Loss: 0.1375 | Acc: 95.47% | Val Top-1: 94.96%
+  Epoch 8/10 | Loss: 0.1295 | Acc: 95.78% | Val Top-1: 95.17%
+  Epoch 9/10 | Loss: 0.1230 | Acc: 96.06% | Val Top-1: 95.72%
+  Epoch 10/10 | Loss: 0.1183 | Acc: 96.26% | Val Top-1: 95.76%
+[CoOp] Done in 1791.0s | Final Loss: 0.1183 | Best Val: 95.76%
+[CoOp] Top-1: 95.76% | Top-5: 100.00% | Params: 8,192 | 42.2s
+  ✓ CoOp seed=2 (1834.5s)
+[CLIP-Adapter] Training 131,712 params | 10 epochs | LR=0.001 | adamw
+  Epoch 1/10 | Loss: 1.3139 | Acc: 52.15% | Val Top-1: 58.91%
+  Epoch 2/10 | Loss: 0.2257 | Acc: 92.56% | Val Top-1: 94.67%
+  Epoch 3/10 | Loss: 0.1300 | Acc: 95.65% | Val Top-1: 95.80%
+  Epoch 4/10 | Loss: 0.1018 | Acc: 96.56% | Val Top-1: 96.48%
+  Epoch 5/10 | Loss: 0.0878 | Acc: 97.00% | Val Top-1: 96.02%
+  Epoch 6/10 | Loss: 0.0742 | Acc: 97.36% | Val Top-1: 96.59%
+  Epoch 7/10 | Loss: 0.0621 | Acc: 97.88% | Val Top-1: 96.48%
+  Epoch 8/10 | Loss: 0.0551 | Acc: 98.17% | Val Top-1: 96.93%
+  Epoch 9/10 | Loss: 0.0486 | Acc: 98.39% | Val Top-1: 96.87%
+  Epoch 10/10 | Loss: 0.0446 | Acc: 98.57% | Val Top-1: 96.98%
+[CLIP-Adapter] Done in 2059.6s | Final Loss: 0.0446 | Best Val: 96.98%
+[CLIP-Adapter] Top-1: 96.98% | Top-5: 100.00% | Params: 131,712 | 36.9s
+  ✓ CLIP-Adapter seed=2 (2097.8s)
+[CoOp+Adapter] Training 139,904 params | 10 epochs | LR=0.001 | adamw
+  param groups: context=8,192@0.001, adapter=131,712@0.001
+  Epoch 1/10 | Loss: 1.1980 | Acc: 57.49% | Val Top-1: 67.67%
+  Epoch 2/10 | Loss: 0.2334 | Acc: 92.34% | Val Top-1: 94.57%
+  Epoch 3/10 | Loss: 0.1306 | Acc: 95.58% | Val Top-1: 94.98%
+  Epoch 4/10 | Loss: 0.1055 | Acc: 96.50% | Val Top-1: 95.78%
+  Epoch 5/10 | Loss: 0.0882 | Acc: 96.91% | Val Top-1: 96.48%
+  Epoch 6/10 | Loss: 0.0745 | Acc: 97.51% | Val Top-1: 96.28%
+  Epoch 7/10 | Loss: 0.0607 | Acc: 97.80% | Val Top-1: 96.41%
+  Epoch 8/10 | Loss: 0.0520 | Acc: 98.21% | Val Top-1: 97.17%
+  Epoch 9/10 | Loss: 0.0435 | Acc: 98.53% | Val Top-1: 97.19%
+  Epoch 10/10 | Loss: 0.0385 | Acc: 98.74% | Val Top-1: 97.09%
+[CoOp+Adapter] Done in 2123.5s | Final Loss: 0.0385 | Best Val: 97.19%
+[CoOp+Adapter] Top-1: 97.09% | Top-5: 100.00% | Params: 139,904 | 33.3s
+  ✓ CoOp+Adapter seed=2 (2158.0s)
+[LoRA] Training 368,640 params | 10 epochs | LR=0.0001 | adamw
+  Epoch 1/10 | Loss: 1.3035 | Acc: 52.50% | Val Top-1: 58.76%
+  Epoch 2/10 | Loss: 0.2166 | Acc: 93.40% | Val Top-1: 97.00%
+  Epoch 3/10 | Loss: 0.0694 | Acc: 97.75% | Val Top-1: 97.78%
+  Epoch 4/10 | Loss: 0.0457 | Acc: 98.51% | Val Top-1: 98.00%
+  Epoch 5/10 | Loss: 0.0344 | Acc: 98.85% | Val Top-1: 98.20%
+  Epoch 6/10 | Loss: 0.0239 | Acc: 99.25% | Val Top-1: 98.17%
+  Epoch 7/10 | Loss: 0.0176 | Acc: 99.50% | Val Top-1: 98.20%
+  Epoch 8/10 | Loss: 0.0126 | Acc: 99.69% | Val Top-1: 98.24%
+  Epoch 9/10 | Loss: 0.0103 | Acc: 99.79% | Val Top-1: 98.43%
+  Epoch 10/10 | Loss: 0.0089 | Acc: 99.86% | Val Top-1: 98.31%
+[LoRA] Done in 2855.5s | Final Loss: 0.0089 | Best Val: 98.43%
+[LoRA] Top-1: 98.31% | Top-5: 100.00% | Params: 368,640 | 33.2s
+  ✓ LoRA seed=2 (2890.0s)
+[few_shot] 16-shot support set: 160 images across 10 classes (seed=2).
+Tip-Adapter cache built: keys torch.Size([160, 512]), values torch.Size([160, 10])
+[Tip-Adapter] Top-1: 74.31% | Top-5: 98.69% | Params: 0 | 33.1s
+[Tip-Adapter-F] Top-1: 96.56% | Top-5: 100.00% | Params: 81,920 | 38.1s
+  ✓ Tip-Adapter + Tip-Adapter-F seed=2 (1533.4s)
+
+  Protocol: full-shot | epochs=10 | seeds=[0, 1, 2] | eval on the full test split
+
+========================================
+  TOP-1 ACCURACY (%) — mean ± std over seeds
+========================================
+| Method            |          EuroSAT |
+|-------------------|------------------|
+| ZeroShot          |      46.35     |
+| ZeroShot-Ensemble |      50.61     |
+| LinearProbe       |      93.81     |
+| OptimalTransport  |      20.31     |
+| CoOp              |    95.65 ± 0.09  |
+| CLIP-Adapter      |    97.02 ± 0.04  |
+| CoOp+Adapter      |    97.12 ± 0.03  |
+| Tip-Adapter       |    73.74 ± 1.08  |
+| Tip-Adapter-F     |    96.54 ± 0.53  |
+| LoRA              |    98.47 ± 0.14  |
+========================================
+
+========================================
+  TRAINABLE PARAMETERS (the CLIP backbone is frozen throughout)
+========================================
+| Method            |          EuroSAT |
+|-------------------|------------------|
+| ZeroShot          |                0 |
+| ZeroShot-Ensemble |                0 |
+| LinearProbe       |            5,130 |
+| OptimalTransport  |                0 |
+| CoOp              |            8,192 |
+| CLIP-Adapter      |          131,712 |
+| CoOp+Adapter      |          139,904 |
+| Tip-Adapter       |                0 |
+| Tip-Adapter-F     |           81,920 |
+| LoRA              |          368,640 |
+========================================
+
+[Results] Saved to /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/results_eurosat_full.json
+[Results] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/predictions_eurosat.npz
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/unified_comparison.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/accuracy_vs_params_unified.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/training_cost.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/memory_vs_epochs_eurosat.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/confusion_matrices.png
+
+============================================================
+Classification Report: ZeroShot
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.39      0.43      0.41       631
+               Forest       0.34      0.24      0.28       582
+Herbaceous Vegetation       0.86      0.01      0.02       612
+      Highway Or Road       0.52      0.53      0.53       525
+           Industrial       0.74      0.87      0.80       484
+              Pasture       0.50      0.52      0.51       396
+       Permanent Crop       0.29      0.53      0.37       506
+          Residential       0.86      0.96      0.91       606
+                River       0.38      0.35      0.36       497
+          Sea Or Lake       0.22      0.29      0.25       561
+
+             accuracy                           0.46      5400
+            macro avg       0.51      0.47      0.44      5400
+         weighted avg       0.52      0.46      0.44      5400
+
+
+============================================================
+Classification Report: ZeroShot-Ensemble
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.45      0.24      0.31       631
+               Forest       0.30      0.23      0.26       582
+Herbaceous Vegetation       1.00      0.00      0.01       612
+      Highway Or Road       0.83      0.62      0.71       525
+           Industrial       0.75      0.91      0.82       484
+              Pasture       0.65      0.57      0.61       396
+       Permanent Crop       0.35      0.73      0.47       506
+          Residential       0.91      0.95      0.93       606
+                River       0.33      0.41      0.37       497
+          Sea Or Lake       0.32      0.55      0.40       561
+
+             accuracy                           0.51      5400
+            macro avg       0.59      0.52      0.49      5400
+         weighted avg       0.59      0.51      0.48      5400
+
+
+============================================================
+Classification Report: OptimalTransport
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.00      0.00      0.00       631
+               Forest       0.30      0.02      0.04       582
+Herbaceous Vegetation       0.00      0.00      0.00       612
+      Highway Or Road       0.79      0.43      0.55       525
+           Industrial       0.00      0.00      0.00       484
+              Pasture       0.06      0.01      0.01       396
+       Permanent Crop       0.11      0.98      0.20       506
+          Residential       0.68      0.38      0.49       606
+                River       0.59      0.25      0.35       497
+          Sea Or Lake       0.75      0.01      0.01       561
+
+             accuracy                           0.20      5400
+            macro avg       0.33      0.21      0.17      5400
+         weighted avg       0.33      0.20      0.17      5400
+
+
+============================================================
+Classification Report: LinearProbe
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.91      0.95      0.93       631
+               Forest       0.92      0.98      0.95       582
+Herbaceous Vegetation       0.91      0.95      0.93       612
+      Highway Or Road       0.95      0.87      0.91       525
+           Industrial       0.97      0.98      0.97       484
+              Pasture       0.92      0.89      0.91       396
+       Permanent Crop       0.95      0.89      0.92       506
+          Residential       0.98      0.99      0.98       606
+                River       0.91      0.90      0.90       497
+          Sea Or Lake       0.97      0.96      0.97       561
+
+             accuracy                           0.94      5400
+            macro avg       0.94      0.94      0.94      5400
+         weighted avg       0.94      0.94      0.94      5400
+
+
+============================================================
+Classification Report: CoOp
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.94      0.95      0.95       631
+               Forest       0.96      0.98      0.97       582
+Herbaceous Vegetation       0.95      0.96      0.96       612
+      Highway Or Road       0.93      0.92      0.93       525
+           Industrial       0.98      0.97      0.97       484
+              Pasture       0.95      0.94      0.94       396
+       Permanent Crop       0.93      0.93      0.93       506
+          Residential       0.98      0.99      0.98       606
+                River       0.95      0.92      0.93       497
+          Sea Or Lake       0.98      0.98      0.98       561
+
+             accuracy                           0.96      5400
+            macro avg       0.96      0.95      0.96      5400
+         weighted avg       0.96      0.96      0.96      5400
+
+
+============================================================
+Classification Report: CLIP-Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.96      0.97      0.96       631
+               Forest       0.98      0.99      0.99       582
+Herbaceous Vegetation       0.96      0.97      0.97       612
+      Highway Or Road       0.95      0.94      0.95       525
+           Industrial       0.98      0.98      0.98       484
+              Pasture       0.97      0.95      0.96       396
+       Permanent Crop       0.96      0.94      0.95       506
+          Residential       0.99      1.00      0.99       606
+                River       0.96      0.95      0.96       497
+          Sea Or Lake       0.99      0.99      0.99       561
+
+             accuracy                           0.97      5400
+            macro avg       0.97      0.97      0.97      5400
+         weighted avg       0.97      0.97      0.97      5400
+
+
+============================================================
+Classification Report: CoOp+Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.96      0.96      0.96       631
+               Forest       0.98      0.99      0.98       582
+Herbaceous Vegetation       0.96      0.97      0.97       612
+      Highway Or Road       0.96      0.95      0.96       525
+           Industrial       0.99      0.98      0.98       484
+              Pasture       0.97      0.95      0.96       396
+       Permanent Crop       0.95      0.95      0.95       506
+          Residential       0.99      0.99      0.99       606
+                River       0.97      0.96      0.96       497
+          Sea Or Lake       0.99      0.99      0.99       561
+
+             accuracy                           0.97      5400
+            macro avg       0.97      0.97      0.97      5400
+         weighted avg       0.97      0.97      0.97      5400
+
+
+============================================================
+Classification Report: LoRA
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.98      0.97      0.98       631
+               Forest       0.99      0.99      0.99       582
+Herbaceous Vegetation       0.98      0.98      0.98       612
+      Highway Or Road       0.98      0.99      0.99       525
+           Industrial       0.99      0.99      0.99       484
+              Pasture       0.97      0.98      0.98       396
+       Permanent Crop       0.96      0.97      0.97       506
+          Residential       1.00      1.00      1.00       606
+                River       1.00      0.98      0.99       497
+          Sea Or Lake       0.99      1.00      1.00       561
+
+             accuracy                           0.99      5400
+            macro avg       0.98      0.98      0.98      5400
+         weighted avg       0.99      0.99      0.99      5400
+
+
+============================================================
+Classification Report: Tip-Adapter
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.84      0.84      0.84       631
+               Forest       0.55      0.76      0.64       582
+Herbaceous Vegetation       0.93      0.35      0.51       612
+      Highway Or Road       0.93      0.55      0.69       525
+           Industrial       0.83      0.88      0.85       484
+              Pasture       0.46      0.86      0.60       396
+       Permanent Crop       0.76      0.74      0.75       506
+          Residential       0.87      0.98      0.92       606
+                River       0.83      0.62      0.71       497
+          Sea Or Lake       0.79      0.89      0.84       561
+
+             accuracy                           0.74      5400
+            macro avg       0.78      0.75      0.74      5400
+         weighted avg       0.79      0.74      0.74      5400
+
+
+============================================================
+Classification Report: Tip-Adapter-F
+============================================================
+                       precision    recall  f1-score   support
+
+          Annual Crop       0.95      0.97      0.96       631
+               Forest       0.99      0.99      0.99       582
+Herbaceous Vegetation       0.95      0.99      0.97       612
+      Highway Or Road       0.95      0.95      0.95       525
+           Industrial       0.99      0.97      0.98       484
+              Pasture       0.98      0.93      0.96       396
+       Permanent Crop       0.95      0.95      0.95       506
+          Residential       0.99      1.00      0.99       606
+                River       0.96      0.95      0.96       497
+          Sea Or Lake       0.99      0.99      0.99       561
+
+             accuracy                           0.97      5400
+            macro avg       0.97      0.97      0.97      5400
+         weighted avg       0.97      0.97      0.97      5400
+
+
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/per_class_accuracy.png
+[Plot] Saved: /mnt/c/Users/marco/Desktop/UNIVERSITA/MAGISTRALE/APAI_exam/plots/tsne_features.png
+
+[run_all] Total time: 521.6 minutes
+[run_all] Done.
