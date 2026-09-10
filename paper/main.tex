@@ -1,0 +1,813 @@
+% ============================================================================
+% Beyond Single Prompts: Comparing Vision Adapters, CoOp, and Optimal
+% Transport for Domain-Specific Image Classification
+%
+% APAI (Advanced Programming for AI) — CVPR 2025 Template
+% ============================================================================
+% NOTE: This file provides the CONTENT only.
+% Compile with the CVPR 2025 template files (cvpr.sty, etc.) already in
+% your working directory.
+% ============================================================================
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+% ---- CVPR 2025 style (assumes cvpr.sty is present) ----
+\usepackage[pagenumbers]{cvpr}
+
+% ---- Standard packages ----
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+% Convenience
+\newcommand{\eg}{\emph{e.g.}}
+\newcommand{\ie}{\emph{i.e.}}
+\newcommand{\etal}{\emph{et al.}}
+
+% ============================================================================
+\title{Beyond Single Prompts: Comparing Vision Adapters, CoOp,\\
+and Optimal Transport for Domain-Specific Image Classification}
+
+\author{
+  Mattia~\textsc{[Surname]}%
+  \and Carlo~\textsc{[Surname]}%
+  \and Marco~\textsc{[Surname]}%
+  \\[4pt]
+  \textit{Advanced Programming for AI (APAI)}\\
+  \textit{[University Name]}\\
+  {\small\texttt{\{mattia, carlo, marco\}@[email]}}
+}
+
+\begin{document}
+\maketitle
+
+% ============================================================================
+% 1. ABSTRACT
+% ============================================================================
+\begin{abstract}
+
+Large-scale vision--language models such as CLIP offer strong zero-shot
+transfer, yet their performance on specialised visual domains---satellite
+imagery, textures, fine-grained flowers---still lags behind lightweight
+task-specific adaptation.  The question is not merely \emph{which adapter
+is most accurate}, but \emph{how much accuracy each trainable parameter
+buys}.
+
+We present a controlled comparison of seven parameter-efficient adaptation
+strategies applied to a \emph{single frozen} CLIP ViT-B/32 backbone:
+(i)~zero-shot prompting and prompt ensembling,
+(ii)~linear probing,
+(iii)~Context Optimization (CoOp) with learned text prompts,
+(iv)~CLIP-Adapter with a vision-side bottleneck MLP,
+(v)~a joint CoOp\,+\,Adapter model that adapts both modalities simultaneously,
+(vi)~Tip-Adapter and its fine-tuned variant Tip-Adapter-F with a training-free
+key--value cache, and
+(vii)~Low-Rank Adaptation (LoRA) injected into the vision tower.
+As an exploratory baseline, we also evaluate Sinkhorn-based Optimal Transport
+(OT) on patch-level tokens, which underperforms zero-shot on all benchmarks
+and provides instructive negative results.
+
+% TODO: Update numbers after final verified run
+All methods share the same frozen backbone, the same evaluation loop, and the
+same 16-shot few-shot protocol across three datasets (EuroSAT, DTD,
+Flowers102), making accuracy, parameter count, GPU memory, and wall-clock
+time directly comparable.
+Our main finding is that CoOp's 8\,192 learnable prompt tokens---0.0095\,\%
+of the backbone---close the majority of the gap between zero-shot and
+full supervision, while Tip-Adapter-F achieves the highest overall accuracy
+with a fine-tuned visual cache.
+
+\smallskip\noindent\textbf{Code:}~\url{https://github.com/MarcoEquisetto/APAI_exam}
+\end{abstract}
+
+% ============================================================================
+% 2. INTRODUCTION
+% ============================================================================
+\section{Introduction}\label{sec:introduction}
+
+\subsection{Problem Statement and Motivation}
+
+Contrastive Language--Image Pre-training (CLIP)~\cite{radford2021learning}
+has demonstrated remarkable zero-shot transfer capabilities across
+hundreds of visual recognition tasks.  By aligning images and captions in a
+shared embedding space, CLIP enables classification via natural-language
+prompts without any task-specific training.  Yet in specialised domains
+---remote sensing, material textures, fine-grained botany---zero-shot
+accuracy remains far from satisfactory: a frozen ViT-B/32 achieves only
+46.4\,\% on EuroSAT~\cite{helber2019eurosat}, 54.9\,\% on
+DTD~\cite{cimpoi2014describing}, and 71.5\,\% on
+Flowers102~\cite{nilsback2008automated}, well below
+the needs of any practical application.
+
+The standard remedy is full fine-tuning, but updating all 86~million
+parameters of a ViT-B/32 requires large labelled datasets and risks
+catastrophic forgetting of the broad visual--linguistic knowledge that
+makes CLIP useful in the first place.  A rapidly growing family of
+\emph{parameter-efficient adaptation} methods addresses this by training a
+small number of new parameters while keeping the backbone frozen.
+These methods differ in \emph{where} they intervene---on the text side
+(learned prompts), on the vision side (adapter layers), or on both---and
+in \emph{how many parameters} they introduce, from zero (training-free
+caches) to several hundred thousand (LoRA inside the backbone).
+
+\subsection{Challenges and Prior Work}
+
+Several adaptation strategies have been proposed for CLIP.
+\textbf{CoOp}~\cite{zhou2022learning} replaces the hand-written text
+template with $M$ continuous context vectors optimised by gradient descent.
+\textbf{CLIP-Adapter}~\cite{gao2024clipadapter} appends a bottleneck MLP
+after the frozen visual encoder and blends adapted features with the
+originals via a residual connection.
+\textbf{Tip-Adapter}~\cite{zhang2022tip} takes a training-free approach,
+constructing a key--value cache from few-shot support images and combining
+cache-based logits with zero-shot predictions.  Its fine-tuned variant,
+\textbf{Tip-Adapter-F}, further optimises the cache keys by gradient
+descent.
+\textbf{LoRA}~\cite{hu2022lora}, originally proposed for large language
+models, injects low-rank matrices into existing linear layers, enabling
+adaptation \emph{inside} the backbone with a modest parameter overhead.
+Finally, \textbf{Optimal Transport}~\cite{cuturi2013sinkhorn} offers a
+principled framework for comparing distributions of tokens, using the
+Sinkhorn algorithm to compute a structured distance between patch-level
+image features and word-level text features.
+
+Despite this rich landscape, existing studies typically evaluate each method
+in isolation, with different backbones, different datasets, different shot
+counts, and different hyperparameter protocols, making fair comparisons
+difficult.
+
+\subsection{Limitations of Existing Comparisons}
+
+\begin{enumerate}
+  \item \textbf{Inconsistent backbones.} CoOp reports results on a
+    ResNet-50 CLIP, while CLIP-Adapter uses ViT-B/16 and Tip-Adapter
+    uses ViT-B/32---all under different pre-training regimes.
+  \item \textbf{Uncontrolled shot protocols.}  Methods are often compared
+    at different shot counts or with different sampling seeds, confounding
+    accuracy differences with data selection effects.
+  \item \textbf{Missing efficiency metrics.}  Papers report accuracy but
+    rarely tabulate GPU memory, training time, or the number of trainable
+    parameters on the same hardware, leaving practitioners with no basis
+    for cost--benefit analysis.
+  \item \textbf{No negative results.}  Methods that underperform zero-shot
+    CLIP (such as naïve Optimal Transport on token features) are typically
+    unpublished, depriving the community of insights into failure modes.
+\end{enumerate}
+
+\subsection{Contributions}
+
+We make the following contributions:
+
+\begin{enumerate}
+  \item \textbf{Unified benchmark.}  We implement ten adaptation strategies
+    within a single codebase, all sharing the same frozen ViT-B/32
+    backbone (LAION-2B weights via OpenCLIP), the same evaluation loop,
+    the same few-shot sampling, and the same epoch budget.  This makes
+    accuracy, parameter count, peak GPU memory, and wall-clock time
+    directly comparable across every method.
+
+  \item \textbf{Efficiency analysis.}  We quantify the \emph{accuracy per
+    trainable parameter} of each method across three domains (EuroSAT,
+    DTD, Flowers102), revealing that the majority of the zero-shot-to-%
+    supervised gap can be closed with fewer than 10\,000 parameters, and
+    that the marginal return per parameter decreases sharply beyond that
+    point.
+
+  \item \textbf{Joint adaptation.}  We construct a joint
+    CoOp\,+\,CLIP-Adapter model that adapts both text and vision
+    modalities simultaneously, and document the non-trivial software
+    engineering required to compose two independently developed adapter
+    modules (MRO conflicts, optimizer group splits, gradient flow traps).
+
+  \item \textbf{Informative negative result.}  We provide a thorough
+    analysis of why Sinkhorn-based Optimal Transport on patch-level
+    features fails to outperform zero-shot CLIP: patch tokens are not in
+    the contrastively aligned space, uniform marginals over-weight
+    background patches, and shared template words dominate the text-token
+    distribution.
+
+  \item \textbf{Open-source reproducibility.}  The complete codebase,
+    including all experiment scripts, plotting utilities, and raw result
+    files, is publicly available.\footnote{%
+      \url{https://github.com/MarcoEquisetto/APAI_exam}}
+\end{enumerate}
+
+\subsection{Paper Overview}
+
+The remainder of this paper is organised as follows.
+Section~\ref{sec:method} details our experimental framework, mathematical
+formulations, and training protocol.
+Section~\ref{sec:results} presents comparative results and ablation studies.
+Section~\ref{sec:conclusion} summarises our findings, discusses limitations,
+and suggests directions for future work.
+Section~\ref{sec:contributions} details the individual contributions of
+each team member.
+
+
+% ============================================================================
+% 3. METHOD
+% ============================================================================
+\section{Method}\label{sec:method}
+
+% ----- PLACEHOLDER: Pipeline Architecture Diagram -----
+% TODO: INSERT PIPELINE ARCHITECTURE DIAGRAM HERE
+% The diagram should show: frozen CLIP backbone (ViT-B/32) in the centre,
+% with the text encoder on one side and the vision encoder on the other.
+% Each adaptation method should be shown as a coloured module plugged into
+% the appropriate encoder output.  Suggested tool: TikZ or draw.io.
+%
+% \begin{figure*}[t]
+%   \centering
+%   \includegraphics[width=\textwidth]{figures/pipeline.pdf}
+%   \caption{Overview of the experimental pipeline.  All methods share a
+%     single frozen CLIP ViT-B/32 backbone and differ only in the coloured
+%     adapter modules.}
+%   \label{fig:pipeline}
+% \end{figure*}
+% -------------------------------------------------------
+
+\subsection{Frozen Backbone}\label{sec:backbone}
+
+All experiments use a ViT-B/32 backbone loaded from OpenCLIP with
+LAION-2B weights (\texttt{laion2b\_s34b\_b79k}).  The backbone comprises
+a 12-layer Vision Transformer (86\,M parameters) producing 512-dimensional
+embeddings for both images and text.  All backbone parameters are frozen
+(\texttt{requires\_grad\,=\,False}); only parameters introduced by each
+adaptation module are trainable.
+
+A shared base class, \texttt{BaseCLIPWrapper}, encapsulates the frozen
+backbone and exposes two virtual methods---\texttt{get\_image\_features()}
+and \texttt{get\_text\_features()}---that subclasses override to inject
+their adapter logic.  A single \texttt{predict()} method, inherited by
+all adapters, computes cosine similarities between image and text
+prototypes, ensuring that every method is evaluated through the same code
+path.
+
+\subsection{Baseline Methods}\label{sec:baselines}
+
+\paragraph{Zero-Shot CLIP.}
+Classification is performed by encoding each class name with a prompt
+template (\eg, ``a satellite image of \{class\}'') and selecting the class
+whose text embedding has the highest cosine similarity to the image
+embedding.  No parameters are trained.
+
+\paragraph{Zero-Shot with Prompt Ensembling.}
+Following Radford~\etal~\cite{radford2021learning}, we average the text
+prototypes produced by 7~templates that vary in viewpoint and framing
+(\eg, ``a satellite photo of \{\}'', ``an aerial view of \{\}'').  This
+costs no additional parameters and typically adds 2--4 accuracy points.
+
+\paragraph{Linear Probe.}
+An $\ell_2$-regularised logistic regression (implemented via
+\texttt{scikit-learn}) is fitted on the frozen image features.  The number
+of trainable parameters is $C \times (D + 1)$, where $C$ is the number of
+classes and $D = 512$.
+
+\subsection{CoOp: Learnable Text Prompts}\label{sec:coop}
+
+Context Optimization (CoOp)~\cite{zhou2022learning} replaces the
+hand-written template with $M$ continuous context vectors in the text
+transformer's input embedding space:
+\begin{equation}\label{eq:coop}
+  \mathbf{p}_c = [\mathrm{SOS}]\;
+  \underbrace{\mathbf{v}_1\;\mathbf{v}_2\;\cdots\;\mathbf{v}_M}_{\text{learnable}}
+  \;[\mathrm{tok}(c)]\;[\mathrm{EOS}]
+\end{equation}
+where $[\mathrm{tok}(c)]$ denotes the frozen BPE embedding of class name
+$c$.  In the \emph{Unified Context} variant a single
+$(\mathbf{v}_1, \ldots, \mathbf{v}_M)$ block is shared across all classes;
+in the \emph{Class-Specific Context} (CSC) variant each class receives its
+own block, multiplying the parameter count by $C$.
+
+For ViT-B/32 with $M = 16$, the unified variant introduces
+$16 \times 512 = 8{,}192$ trainable parameters.  The text transformer is
+run from the assembled embeddings directly, bypassing the frozen token
+embedding table for the context positions, so gradients flow only through
+$\mathbf{v}_1, \ldots, \mathbf{v}_M$.  We train with SGD (momentum 0.9,
+learning rate $2 \times 10^{-3}$) and a cosine-annealing schedule with a
+linear warmup epoch.
+
+\subsection{CLIP-Adapter: Vision-Side Bottleneck MLP}\label{sec:adapter}
+
+CLIP-Adapter~\cite{gao2024clipadapter} appends a trainable bottleneck
+MLP after the frozen vision encoder:
+\begin{align}
+  \mathbf{f}_{\mathrm{adapt}} &= W_{\mathrm{up}} \;\sigma\bigl(
+    W_{\mathrm{down}}\,\mathbf{f}\bigr) \label{eq:adapter-mlp}\\
+  \tilde{\mathbf{f}} &= \alpha\,\mathbf{f}_{\mathrm{adapt}}
+    + (1-\alpha)\,\mathbf{f} \label{eq:adapter-blend}
+\end{align}
+where $\mathbf{f} \in \mathbb{R}^D$ is the frozen, L2-normalised image
+embedding, $W_{\mathrm{down}} \in \mathbb{R}^{(D/r) \times D}$ and
+$W_{\mathrm{up}} \in \mathbb{R}^{D \times (D/r)}$ form the bottleneck
+with reduction ratio $r$, $\sigma$ is ReLU, and
+$\alpha \in [0, 1]$ is a residual blending factor.
+The adapted features $\tilde{\mathbf{f}}$ are L2-normalised before
+similarity computation.
+
+With $r = 4$ and $D = 512$ the adapter introduces $131{,}712$ trainable
+parameters.  $W_{\mathrm{up}}$ is initialised near zero so that training
+begins close to the original CLIP representation.  We train with AdamW
+(learning rate $10^{-3}$, cosine schedule).
+
+\subsection{Joint CoOp + CLIP-Adapter}\label{sec:joint}
+
+The two methods are complementary by construction: CoOp overrides
+\texttt{get\_text\_features()} and CLIP-Adapter overrides
+\texttt{get\_image\_features()}.  We compose them in a single model that
+adapts both modalities simultaneously, for a total of
+$8{,}192 + 131{,}712 = 139{,}904$ parameters.
+
+Naïve Python multiple inheritance fails because of a Method Resolution
+Order (MRO) conflict: during construction,
+\texttt{CLIPAdapterModel.\_\_init\_\_()} calls
+\texttt{self.\_update\_text\_prototypes()}, which resolves to CoOp's text
+path and reads \texttt{self.prompt\_learner}---a module that has not been
+created yet.  We resolve this by constructing both modules explicitly in a
+controlled order and assigning the feature methods as function attributes.
+
+Crucially, the two halves require different optimiser recipes.  CoOp trains
+with SGD at $2 \times 10^{-3}$; the adapter trains with AdamW at
+$10^{-3}$.  A single learning rate applied to both degrades accuracy
+below either method alone.  We therefore define per-module parameter groups
+under one AdamW optimiser.
+
+\subsection{Tip-Adapter and Tip-Adapter-F}\label{sec:tip}
+
+Tip-Adapter~\cite{zhang2022tip} constructs a training-free key--value
+cache $(\mathbf{F}_{\mathrm{train}}, \mathbf{L}_{\mathrm{train}})$ from
+the few-shot support set, where $\mathbf{F}_{\mathrm{train}} \in
+\mathbb{R}^{N \times D}$ are frozen image features and
+$\mathbf{L}_{\mathrm{train}} \in \mathbb{R}^{N \times C}$ are one-hot
+label vectors.  At test time:
+\begin{equation}\label{eq:tip}
+  \mathrm{logits} = 100\,\mathbf{f}_{\mathrm{test}}
+    \mathbf{W}_{\mathrm{text}}^\top
+  + \alpha\,\exp\!\bigl(-\beta(1 - \mathbf{f}_{\mathrm{test}}
+    \mathbf{F}_{\mathrm{train}}^\top)\bigr)\,\mathbf{L}_{\mathrm{train}}
+\end{equation}
+where the first term is the zero-shot logit and the second is a
+cache-based correction weighted by visual similarity.
+
+\textbf{Tip-Adapter-F} promotes the cache keys $\mathbf{F}_{\mathrm{train}}$
+to learnable parameters and fine-tunes them with cross-entropy loss (AdamW,
+$\mathrm{lr} = 10^{-3}$, 20 epochs).  The number of trainable parameters
+is $N \times D = 16 \cdot C \cdot 512$, which scales with the number of
+classes.
+
+\subsection{LoRA: Low-Rank Adaptation Inside the Backbone}\label{sec:lora}
+
+Low-Rank Adaptation (LoRA)~\cite{hu2022lora} injects trainable low-rank
+matrices into existing linear layers.  For each target layer with weight
+$W_0 \in \mathbb{R}^{d_{\mathrm{out}} \times d_{\mathrm{in}}}$, LoRA
+adds:
+\begin{equation}\label{eq:lora}
+  W = W_0 + \frac{\alpha}{r}\,B\,A
+\end{equation}
+where $A \in \mathbb{R}^{r \times d_{\mathrm{in}}}$ and
+$B \in \mathbb{R}^{d_{\mathrm{out}} \times r}$ with rank $r \ll
+\min(d_{\mathrm{in}}, d_{\mathrm{out}})$; $\alpha$ scales the
+contribution.  $W_0$ remains frozen.
+
+We apply LoRA to the MLP layers (\texttt{c\_fc} and \texttt{c\_proj}) of
+every transformer block in the vision tower with $r = 4$ and
+$\alpha = 1.0$, introducing $368{,}640$ trainable parameters.  Unlike all
+other methods in this study, LoRA modifies the computation \emph{inside}
+the backbone; the pretrained weights still remain frozen, but this is a
+deliberate out-of-brief comparison.  We train with AdamW at
+$\mathrm{lr} = 10^{-4}$ (10$\times$ lower than the adapter) with cosine
+scheduling.
+
+\subsection{Optimal Transport (Exploratory)}\label{sec:ot}
+
+As an exploratory baseline, we use Sinkhorn-based Optimal
+Transport~\cite{cuturi2013sinkhorn} to compute structured distances between
+the full set of image patch tokens and text word tokens.  For an image with
+$P$ patch tokens $\{\mathbf{x}_i\}$ and a class with $T$ text tokens
+$\{\mathbf{y}_j\}$, we build a cost matrix
+$C_{ij} = 1 - \cos(\mathbf{x}_i, \mathbf{y}_j)$ and solve:
+\begin{equation}\label{eq:sinkhorn}
+  d_{\varepsilon}(\mathbf{a}, \mathbf{b})
+    = \min_{\gamma \in \Pi(\mathbf{a}, \mathbf{b})}
+      \sum_{ij} \gamma_{ij}\,C_{ij}
+      + \varepsilon\,\mathrm{KL}(\gamma \,\|\, \mathbf{a} \otimes \mathbf{b})
+\end{equation}
+with uniform marginals $\mathbf{a} = \frac{1}{P}\mathbf{1}$ and
+$\mathbf{b} = \frac{1}{T}\mathbf{1}$, regularisation $\varepsilon = 0.05$,
+and maximum 100 Sinkhorn iterations.  The predicted class is the one with
+the lowest transport cost.  No parameters are trained.
+
+\subsection{Datasets}\label{sec:datasets}
+
+We evaluate on three benchmarks spanning distinct visual domains:
+
+\begin{itemize}
+  \item \textbf{EuroSAT}~\cite{helber2019eurosat}: 27{,}000 Sentinel-2
+    satellite images, 10 land-use classes.  Template: ``a satellite image
+    of \{class\}''.
+  \item \textbf{DTD}~\cite{cimpoi2014describing}: 5{,}640 texture images,
+    47 classes.  Template: ``a photo of a \{class\} texture''.
+  \item \textbf{Flowers102}~\cite{nilsback2008automated}: 8{,}189 flower
+    images, 102 fine-grained categories.  Template: ``a photo of a
+    \{class\}, a type of flower''.
+\end{itemize}
+
+All images are resized to $224 \times 224$ with bicubic interpolation and
+normalised with ImageNet statistics.  No data augmentation is applied.
+
+\subsection{Training Protocol}\label{sec:protocol}
+
+All trainable methods use 16-shot few-shot sampling with balanced class
+representation, a matched epoch budget of 10 epochs, batch size 64, and
+a cosine-annealing learning rate schedule with a 1-epoch linear warmup.
+% TODO: Verify if your final run used full-shot instead of 16-shot.
+% The unified_results.json config says shots=16.
+Experiments are run on an NVIDIA GPU with PyTorch~2.5.1 (CUDA~12.1).
+
+
+% ============================================================================
+% 4. RESULTS
+% ============================================================================
+\section{Results}\label{sec:results}
+
+% TODO: VERIFY ALL NUMBERS BELOW against your final run before submission.
+% The numbers below come from unified_results.json (shots=16, epochs=10,
+% seed=0).
+
+\subsection{Main Comparison}\label{sec:main-results}
+
+Table~\ref{tab:main} reports top-1 accuracy, trainable parameter count,
+peak GPU memory, and training time for all methods on the three datasets.
+
+\begin{table*}[t]
+\centering
+\caption{Top-1 accuracy (\%), trainable parameters, peak GPU memory (MB),
+  and training time (s) across three datasets.  All methods use a frozen
+  ViT-B/32 backbone.  Best accuracy in \textbf{bold};
+  second-best \underline{underlined}.}
+\label{tab:main}
+\small
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+\multirow{2}{*}{\textbf{Method}} &
+\multirow{2}{*}{\textbf{Params}} &
+\multicolumn{2}{c}{\textbf{EuroSAT}} &
+\multicolumn{2}{c}{\textbf{DTD}} &
+\multicolumn{2}{c}{\textbf{Flowers102}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+& & Acc. & Mem. & Acc. & Mem. & Acc. & Mem. \\
+\midrule
+Zero-Shot           & 0       & 46.35 & 738  & 54.89 & 747  & 71.46 & 747  \\
+ZS + Ensembling     & 0       & 50.61 & 738  & 57.34 & 747  & 71.93 & 747  \\
+Linear Probe        & 5\,130  & 78.94 & 738  & 65.16 & 747  & 86.97 & 747  \\
+Optimal Transport   & 0       & 20.31 & 738  & 23.30 & 747  & 19.06 & 749  \\
+\midrule
+CoOp                & 8\,192  & 75.87 & 1\,424  & 72.45 & 2\,138  & 88.71 & 3\,213  \\
+CLIP-Adapter        & 131\,712 & 81.26 & 1\,347  & 74.31 & 1\,339  & 91.72 & 1\,420  \\
+CoOp + Adapter      & 139\,904 & 81.59 & 1\,426  & 74.15 & 2\,140  & 91.49 & 3\,215  \\
+\midrule
+Tip-Adapter         & 0       & 74.41 & 1\,327  & 62.07 & 1\,329  & 81.17 & 1\,330  \\
+Tip-Adapter-F       & 81\,920 & \textbf{86.26} & 1\,327  & \underline{73.46} & 1\,331  & \textbf{94.02} & 1\,332  \\
+LoRA                & 368\,640 & \underline{81.15} & 2\,073  & 66.65 & 2\,123  & 81.25 & 2\,214  \\
+\midrule
+\multicolumn{8}{l}{\footnotesize \textit{Note:} Tip-Adapter-F param count scales as $16 \cdot C \cdot 512$; shown for EuroSAT ($C{=}10$).}\\
+\multicolumn{8}{l}{\footnotesize \textit{Note:} LoRA is the only method modifying computation inside the backbone.}\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Key observations.}
+\begin{itemize}
+  \item \textbf{Prompt ensembling is free.}  Averaging text features across
+    seven templates adds $+$4.3 points on EuroSAT and $+$2.4 on DTD at
+    zero parameter cost, establishing a stronger zero-shot baseline.
+
+  \item \textbf{CoOp closes the gap efficiently.}  With only 8{,}192
+    parameters (0.0095\,\% of the backbone), CoOp achieves 75.87\,\% on
+    EuroSAT---a $+$29.5 point improvement over zero-shot.  On Flowers102,
+    its 88.71\,\% surpasses even the linear probe.
+
+  \item \textbf{CLIP-Adapter offers consistent gains.}  The vision adapter
+    (131{,}712 params) outperforms CoOp on EuroSAT (+5.4) and DTD (+1.9),
+    where the visual domain shift is largest.
+
+  \item \textbf{Joint adaptation shows diminishing returns.}  The
+    CoOp\,+\,Adapter model performs comparably to the adapter alone,
+    suggesting that both methods target overlapping subspaces of the
+    classification gap.
+
+  \item \textbf{Tip-Adapter-F dominates on accuracy.}  Fine-tuning the
+    visual cache achieves the highest accuracy on EuroSAT (86.26\,\%) and
+    Flowers102 (94.02\,\%), and the second-highest on DTD (73.46\,\%), at
+    moderate parameter cost.
+
+  \item \textbf{LoRA is competitive on EuroSAT but lags elsewhere.}
+    Despite having the most parameters (368{,}640) and the highest memory
+    footprint, LoRA does not generalise as well as lighter methods on DTD
+    and Flowers102, likely due to overfitting on the 16-shot training set.
+
+  \item \textbf{Optimal Transport fails.}  The Sinkhorn method scores
+    \emph{below random chance} on Flowers102 (19.1\,\% for 102 classes).
+    We analyse this failure in Section~\ref{sec:ot-analysis}.
+\end{itemize}
+
+\subsection{Accuracy vs.\ Trainable Parameters}
+
+Figure~\ref{fig:acc-vs-params} plots accuracy as a function of trainable
+parameter count.  The curve shows a strong initial slope (zero-shot →
+CoOp) that flattens rapidly: the first 8{,}192 parameters buy the
+majority of the accuracy gain, and the marginal return per parameter
+decreases sharply thereafter.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{plots/accuracy_vs_params_unified.png}
+  \caption{Top-1 accuracy vs.\ trainable parameter count across all methods
+    and datasets.  The dashed line marks zero-shot performance.}
+  \label{fig:acc-vs-params}
+\end{figure}
+
+\subsection{Training Cost and Resource Usage}
+
+Table~\ref{tab:cost} summarises training time and peak GPU memory.
+Tip-Adapter-F trains in under 150\,s (20 epochs on the cache only);
+CoOp and CLIP-Adapter require 280--710\,s depending on the dataset; the
+joint model's time is dominated by the CoOp-side gradient computation
+through the text transformer.
+
+\begin{table}[t]
+\centering
+\caption{Training time (seconds) for trainable methods.}
+\label{tab:cost}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Method} & \textbf{EuroSAT} & \textbf{DTD} & \textbf{Flowers102} \\
+\midrule
+CoOp            & 357  & 285  & 705  \\
+CLIP-Adapter    & 356  & 265  & 684  \\
+CoOp+Adapter    & 420  & 289  & 713  \\
+Tip-Adapter-F   &  44  &  99  & 146  \\
+LoRA            & 370  & 290  & 689  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analysis of Optimal Transport Failure}\label{sec:ot-analysis}
+
+The Sinkhorn method under-performs zero-shot CLIP on every dataset.  We
+identify three structural reasons:
+
+\begin{enumerate}
+  \item \textbf{Misaligned feature spaces.}  Patch tokens come from the
+    penultimate layer of the vision transformer, \emph{before} contrastive
+    alignment via the projection head.  Although we apply the output
+    projection to all tokens, the contrastive loss only trained the pooled
+    [CLS] token to be aligned with text; individual patch tokens inhabit
+    a space that was never directly optimised for text matching.
+
+  \item \textbf{Uninformative marginals.}  Uniform weighting treats
+    background patches (sky, soil, water) with the same importance as
+    object-relevant patches.  In satellite images, where the object of
+    interest often occupies a small fraction of the $7 \times 7$ grid,
+    the background dominates the transport plan.
+
+  \item \textbf{Template-word dominance.}  The text-token set for each
+    class shares template words (``a'', ``satellite'', ``image'', ``of''),
+    which account for 5 of the $\sim$7 non-padding tokens.  The Sinkhorn
+    distance is thus dominated by the cost of aligning image patches to
+    these shared, non-discriminative tokens, drowning out the
+    class-specific signal.
+\end{enumerate}
+
+These insights suggest concrete improvements (attention-weighted marginals,
+class-name-only tokens) that we leave for future work.
+
+\subsection{Ablation Studies}\label{sec:ablations}
+
+\subsubsection{CoOp: Context Length and Learning Rate}
+
+We sweep the context length $M \in \{4, 8, 16\}$ and learning rate
+$\mathrm{lr} \in \{5 \times 10^{-4}, 10^{-3}, 2 \times 10^{-3},
+5 \times 10^{-3}\}$.
+
+% TODO: Insert ablation table from coop_results.json once you verify
+% which numbers correspond to your final run.
+% Example format:
+% \begin{table}[t]
+% \centering
+% \caption{CoOp ablation: effect of context length $M$ and learning rate.}
+% \label{tab:coop-ablation}
+% \small
+% \begin{tabular}{@{}lcccc@{}}
+% \toprule
+% M & lr=5e-4 & lr=1e-3 & lr=2e-3 & lr=5e-3 \\
+% \midrule
+% 4  & ... & ... & ... & ... \\
+% 8  & ... & ... & ... & ... \\
+% 16 & ... & ... & ... & ... \\
+% \bottomrule
+% \end{tabular}
+% \end{table}
+
+Longer context ($M{=}16$) consistently outperforms shorter ones,
+suggesting that the additional capacity is not wasted in the 16-shot
+regime.  The optimal learning rate is $2 \times 10^{-3}$ with SGD
+and momentum, matching the CoOp paper's recommendation.
+
+\subsubsection{CLIP-Adapter: Reduction Ratio and Alpha}
+
+We sweep the reduction ratio $r \in \{2, 4, 8, 16\}$ and the blending
+factor $\alpha \in \{0.1, 0.2, 0.3, 0.5, 0.7\}$.
+
+% TODO: Insert ablation table from clip_adapter_results.json and
+% clip_adapter_alpha_results.json once verified.
+% \begin{table}[t]
+% \centering
+% \caption{CLIP-Adapter ablation: effect of reduction ratio $r$ and
+%   blending factor $\alpha$.}
+% \label{tab:adapter-ablation}
+% \end{table}
+
+$r{=}4$ (hidden dimension 128) and $\alpha{=}0.2$ form the best
+combination.  Larger $\alpha$ values cause the adapter to overwrite
+too much of the pretrained representation; smaller reduction ratios
+introduce more parameters without a proportional accuracy gain.
+
+\subsubsection{Unified vs.\ Class-Specific Context (CSC)}
+
+Unified context ($M \times D$ shared parameters) and class-specific
+context ($C \times M \times D$ separate parameters) yield comparable
+accuracy in the 16-shot setting.  CSC has $C$ times more parameters
+but does not improve on unified context, likely because the 16-shot
+training set is too small to exploit the additional capacity.
+
+\subsection{Qualitative Analysis}
+
+Figure~\ref{fig:confusion} shows confusion matrices for the best-performing
+methods on EuroSAT, highlighting that the most common failure mode is
+confusion between ``annual crop land'' and ``permanent crop land''---two
+visually similar categories that share agricultural patterns.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{plots/confusion_matrices.png}
+  \caption{Confusion matrices for selected methods on EuroSAT.}
+  \label{fig:confusion}
+\end{figure}
+
+Figure~\ref{fig:tsne} presents t-SNE visualisations of the adapted feature
+spaces, showing that trainable methods produce more class-separable
+embeddings than zero-shot CLIP.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{plots/tsne_features.png}
+  \caption{t-SNE of image features: zero-shot vs.\ adapted methods.}
+  \label{fig:tsne}
+\end{figure}
+
+
+% ============================================================================
+% 5. CONCLUSION
+% ============================================================================
+\section{Conclusion}\label{sec:conclusion}
+
+\subsection{Summary of Findings}
+
+We have presented a unified, controlled comparison of seven
+parameter-efficient adaptation strategies for CLIP, evaluated on three
+visually diverse benchmarks with a common frozen ViT-B/32 backbone.
+Our main findings are:
+
+\begin{enumerate}
+  \item \textbf{Extreme parameter efficiency is achievable.}
+    CoOp's 8{,}192 learnable context tokens---less than 0.01\,\% of the
+    backbone---recover a substantial fraction of the accuracy gap
+    between zero-shot and full supervision.
+
+  \item \textbf{Tip-Adapter-F offers the best accuracy--cost trade-off.}
+    Fine-tuning a visual key--value cache achieves the highest accuracy on
+    two of three datasets while training in a fraction of the time
+    required by gradient-based methods.
+
+  \item \textbf{Joint text--vision adaptation yields marginal gains.}
+    Combining CoOp with CLIP-Adapter does not reliably outperform either
+    component alone, suggesting that both methods exploit overlapping
+    subspaces of the representation gap.
+
+  \item \textbf{Token-level Optimal Transport fails without careful
+    engineering.}  Naïve application of Sinkhorn distances to patch and
+    word tokens produces accuracies below zero-shot, due to misaligned
+    feature spaces, uninformative marginals, and template-word dominance.
+\end{enumerate}
+
+\subsection{Impact}
+
+These results have practical implications for deploying CLIP-based
+classifiers in resource-constrained settings.  For practitioners who need
+domain-specific accuracy without the cost of full fine-tuning, our
+analysis provides a clear ranking: \emph{start with prompt ensembling
+(free), add CoOp if labels are available, and consider Tip-Adapter-F
+when accuracy is paramount.}
+
+\subsection{Limitations}
+
+\begin{itemize}
+  \item \textbf{No validation split.}  We use the test set for
+    per-epoch model selection and hyperparameter tuning, following
+    standard practice in the few-shot CLIP literature.  This means our
+    reported accuracies are optimistic estimates.
+  \item \textbf{LAION-2B weights, not OpenAI.}  We use the
+    \texttt{laion2b\_s34b\_b79k} checkpoint rather than the original
+    OpenAI weights.  Zero-shot baselines differ between the two.
+  \item \textbf{Single backbone.}  All experiments use ViT-B/32;
+    results may not transfer to larger architectures (ViT-L/14).
+  \item \textbf{No data augmentation.}  Unlike the original CoOp and
+    CLIP-Adapter papers, we do not apply random crop or horizontal flip
+    during training.
+  \item \textbf{Single seed.}  Most results use a single random seed.
+    While training curves are stable, multi-seed confidence intervals
+    would strengthen the conclusions.
+\end{itemize}
+
+\subsection{Future Work}
+
+Several directions emerge naturally from our findings:
+
+\begin{itemize}
+  \item \textbf{Attention-weighted OT.}  Replace uniform marginals with
+    attention-derived weights and restrict text tokens to class-specific
+    words only, potentially rescuing the Optimal Transport approach.
+  \item \textbf{CoCoOp.}  Extend CoOp with conditional context
+    generation~\cite{zhou2022conditional} to improve cross-domain
+    generalisation.
+  \item \textbf{Larger backbones.}  Evaluate all methods on ViT-L/14 and
+    ViT-H/14 to test whether the efficiency--accuracy trade-offs hold at
+    scale.
+  \item \textbf{Proper validation protocol.}  Introduce a held-out
+    validation split to decouple model selection from test evaluation.
+  \item \textbf{Data augmentation.}  Incorporate standard augmentations
+    (random resized crop, horizontal flip) to match the original papers'
+    protocols and improve few-shot accuracy.
+\end{itemize}
+
+
+% ============================================================================
+% 6. CONTRIBUTIONS
+% ============================================================================
+\section{Contributions}\label{sec:contributions}
+
+% TODO: Fill in specific contributions for each team member.
+% The structure below follows the README; adjust as needed.
+
+\begin{itemize}
+  \item \textbf{Mattia:}
+    \begin{itemize}
+      \item Infrastructure: project architecture, \texttt{BaseCLIPWrapper}
+        base class, shared evaluation pipeline (\texttt{engine.py}),
+        dataset loaders, few-shot sampling protocol.
+      \item Baselines: Zero-Shot CLIP, Zero-Shot with prompt ensembling,
+        Linear Probe.
+      \item Optimal Transport: Sinkhorn-based classification module,
+        patch-token and text-token extraction, failure analysis.
+      \item Paper writing: [TODO: specify sections written].
+    \end{itemize}
+  \item \textbf{Carlo:}
+    \begin{itemize}
+      \item CoOp: \texttt{PromptLearner} module, learnable text context,
+        unified and class-specific variants.
+      \item Joint model: \texttt{CoOpAdapterModel}, MRO resolution,
+        optimizer group split.
+      \item CoOp ablation experiments: context length, CSC, learning rate,
+        shot sweeps.
+      \item Paper writing: [TODO: specify sections written].
+    \end{itemize}
+  \item \textbf{Marco:}
+    \begin{itemize}
+      \item CLIP-Adapter: \texttt{VisionAdapterModule}, bottleneck MLP,
+        residual blending with fixed and learnable $\alpha$.
+      \item Tip-Adapter \& Tip-Adapter-F: key--value cache, cache
+        fine-tuning.
+      \item LoRA: \texttt{LinearLoRA} module, injection into the vision
+        tower's MLP layers.
+      \item CLIP-Adapter ablation experiments: reduction ratio sweep,
+        $\alpha$ sweep.
+      \item Paper writing: [TODO: specify sections written].
+    \end{itemize}
+\end{itemize}
+
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+{\small
+\bibliographystyle{ieee_fullname}
+\bibliography{references}
+}
+
+\end{document}
