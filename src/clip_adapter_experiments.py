@@ -19,10 +19,7 @@ if str(FILE_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Plots and result JSONs always land in <repo>/plots, never in ./plots.
-# A relative path is resolved against the *current working directory*, so
-# running this script from inside src/ used to create a second, duplicate
-# src/plots/ tree — which is how the repository ended up tracking both.
+
 PLOTS_DIR = PROJECT_ROOT / "plots"
 
 from src.base_model import BaseCLIPWrapper
@@ -60,9 +57,6 @@ def run_single_experiment(
         learnable_alpha=learnable_alpha,
     )
 
-    # The tag names every axis that changes the result. Without the alpha
-    # mode in it, a learned-alpha run silently overwrites the fixed-alpha
-    # run it should be compared against.
     model_name = f"CLIPAdapter_R{reduction_ratio}_a{alpha}_{mode}"
 
     # Train model using standard engine loop

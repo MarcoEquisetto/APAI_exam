@@ -1,25 +1,3 @@
-"""
-baselines.py — Zero-Shot & Linear Probe Baselines
-===================================================
-
-This module implements two standard baselines for evaluating CLIP on
-downstream classification tasks:
-
-1. **ZeroShotCLIP** — Pure inference, no training.
-   Computes cosine similarity between image features and text features
-   for every class, then predicts the class with the highest similarity.
-
-2. **LinearProbeCLIP** — Minimal training on top of frozen features.
-   Extracts image features for the entire training set using the frozen
-   CLIP vision encoder, then fits a simple classifier (Logistic Regression
-   from scikit-learn) on those features.
-
-These two baselines represent the lower and upper bounds of what CLIP can
-achieve without architectural modifications.  Any adapter that Carlo or
-Marco builds should ideally outperform ZeroShot and approach or exceed
-LinearProbe.
-"""
-
 import sys
 import os
 from pathlib import Path
@@ -48,9 +26,7 @@ except ModuleNotFoundError:
 
 
 
-# ============================================================================
 # Baseline 1: Zero-Shot CLIP
-# ============================================================================
 class ZeroShotCLIP:
     """
     Zero-shot classification with CLIP.
@@ -65,15 +41,6 @@ class ZeroShotCLIP:
 
     This works because CLIP was trained with a contrastive objective that
     aligns images and their captions in a shared embedding space.
-
-    Parameters
-    ----------
-    clip_wrapper : BaseCLIPWrapper
-        A (possibly subclassed) CLIP wrapper that provides
-        ``get_image_features`` and ``get_text_features``.
-    class_names : List[str]
-        Raw class names (without the prompt template).
-        The template is applied internally.
     """
 
     def __init__(
@@ -84,12 +51,6 @@ class ZeroShotCLIP:
     ) -> None:
         self.clip_wrapper = clip_wrapper
 
-        # ----------------------------------------------------------------
-        # Build text prototypes once and cache them.
-        # We apply the prompt template (e.g., "a satellite image of {}")
-        # to each class name, then encode all prompts in a single forward
-        # pass through the text encoder.
-        # ----------------------------------------------------------------
         prompts = [prompt_template.format(name) for name in class_names]
         # text_prototypes shape: (num_classes, D)
         self.text_prototypes = clip_wrapper.get_text_features(prompts)
@@ -100,70 +61,29 @@ class ZeroShotCLIP:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict class labels for a batch of images.
-
-        Parameters
-        ----------
-        images : torch.Tensor
-            Batch of preprocessed images, shape (B, 3, 224, 224).
-
-        Returns
-        -------
-        predictions : torch.Tensor
-            Predicted class indices, shape (B,).
-        similarities : torch.Tensor
-            Full similarity matrix, shape (B, num_classes).
-            Useful for computing top-k accuracy downstream.
         """
-        # Step 1: Encode images → (B, D), L2-normalized.
+    
+        # 1: Encode images → (B, D), L2-normalized.
         image_features = self.clip_wrapper.get_image_features(images)
 
-        # Step 2: Cosine similarity = dot product of L2-normalized vectors.
-        # image_features: (B, D),  text_prototypes: (num_classes, D)
-        # Result: (B, num_classes) — each entry is the cosine similarity
-        # between one image and one class's text prototype.
+        # 2: Cosine similarity = dot product of L2-normalized vectors.
         similarities = image_features @ self.text_prototypes.T
 
-        # Step 3: The predicted class is the one with highest similarity.
+        # 3: The predicted class is the one with highest similarity.
         predictions = similarities.argmax(dim=-1)
 
         return predictions, similarities
 
 
-# ============================================================================
 # Baseline 1b: Zero-Shot CLIP with Prompt Ensembling
-# ============================================================================
 class ZeroShotEnsembleCLIP:
     """
     Zero-shot classification with prompt ensembling.
-
-    Instead of using a single prompt template (e.g., "a satellite image of {}"),
-    this method generates text features using **multiple templates** and
-    **averages** them for each class.  This is the evaluation protocol
-    recommended in the original CLIP paper (Radford et al., 2021, §3.1.4).
-
-    **Why this helps:**
-
-    Different phrasings activate different parts of CLIP's learned
-    text-image alignment.  For example, "a satellite image of forest"
-    and "an aerial view of forest" encode slightly different aspects of
-    the concept "forest".  Averaging these embeddings produces a text
-    prototype that is more centered in the relevant region of the
-    embedding space, reducing sensitivity to any single phrasing.
 
     The procedure for each class c is:
       1. For each template t ∈ T, compute text_features(t.format(c)).
       2. Average all T feature vectors:  mean_feat = (1/|T|) Σ_t feat_t.
       3. L2-normalize the averaged vector.
-
-    Parameters
-    ----------
-    clip_wrapper : BaseCLIPWrapper
-        Frozen CLIP model.
-    class_names : List[str]
-        Raw class names.
-    templates : List[str]
-        Prompt templates, each containing a ``{}`` placeholder for the
-        class name.  Defaults to ``EUROSAT_PROMPT_TEMPLATES``.
     """
 
     def __init__(
@@ -175,14 +95,7 @@ class ZeroShotEnsembleCLIP:
         self.clip_wrapper = clip_wrapper
         self.templates = templates
 
-        # ----------------------------------------------------------------
         # Build ensembled text prototypes.
-        #
-        # For each class, we encode it under every template, average the
-        # resulting feature vectors, and L2-normalize.  The final tensor
-        # has shape (num_classes, D) — identical to the single-template
-        # version, so the rest of the pipeline is unchanged.
-        # ----------------------------------------------------------------
         self.text_prototypes = self._build_ensemble_prototypes(class_names)
 
     @torch.no_grad()
@@ -191,11 +104,6 @@ class ZeroShotEnsembleCLIP:
     ) -> torch.Tensor:
         """
         Compute ensembled text prototypes by averaging across templates.
-
-        Returns
-        -------
-        prototypes : torch.Tensor
-            L2-normalized text prototypes, shape (num_classes, D).
         """
         all_class_features = []
 
@@ -224,22 +132,6 @@ class ZeroShotEnsembleCLIP:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict class labels using ensembled text prototypes.
-
-        Identical interface to ``ZeroShotCLIP.predict()`` — the only
-        difference is that ``self.text_prototypes`` were built via
-        averaging over multiple templates.
-
-        Parameters
-        ----------
-        images : torch.Tensor
-            Batch of preprocessed images, shape (B, 3, 224, 224).
-
-        Returns
-        -------
-        predictions : torch.Tensor
-            Predicted class indices, shape (B,).
-        similarities : torch.Tensor
-            Cosine similarity matrix, shape (B, num_classes).
         """
         image_features = self.clip_wrapper.get_image_features(images)
         similarities = image_features @ self.text_prototypes.T
@@ -248,37 +140,10 @@ class ZeroShotEnsembleCLIP:
         return predictions, similarities
 
 
-# ============================================================================
-# Baseline 2: Linear Probe CLIP
-# ============================================================================
+# 2: Linear Probe CLIP
 class LinearProbeCLIP:
     """
     Linear probe on frozen CLIP image features.
-
-    This baseline:
-      1. Extracts image features for every sample in the training set
-         using the frozen CLIP vision encoder (one-time cost).
-      2. Fits a Logistic Regression classifier (scikit-learn) on those
-         features.
-      3. At test time, extracts image features and runs them through the
-         trained classifier.
-
-    Why Logistic Regression instead of nn.Linear?
-    - It's simpler: no need for a training loop, optimizer, or scheduler.
-    - scikit-learn's solver handles regularization automatically.
-    - It's the standard protocol used in the original CLIP paper
-      (Radford et al., 2021) for linear probe evaluation.
-
-    Parameters
-    ----------
-    clip_wrapper : BaseCLIPWrapper
-        Frozen CLIP model for feature extraction.
-    C : float
-        Regularization strength for Logistic Regression.
-        Smaller values → stronger regularization.  Default 0.316 is
-        the value used in the CLIP paper.
-    max_iter : int
-        Maximum iterations for the L-BFGS solver.
     """
 
     def __init__(
@@ -289,13 +154,7 @@ class LinearProbeCLIP:
     ) -> None:
         self.clip_wrapper = clip_wrapper
 
-        # ----------------------------------------------------------------
         # Initialize the Logistic Regression classifier.
-        # - solver="lbfgs" is a quasi-Newton method that works well for
-        #   small-to-medium datasets (EuroSAT has ~27k samples).
-        # - Multinomial (softmax) multi-class is the default in modern
-        #   scikit-learn versions.
-        # ----------------------------------------------------------------
         self.classifier = LogisticRegression(
             C=C,
             max_iter=max_iter,
@@ -315,14 +174,8 @@ class LinearProbeCLIP:
 
         Iterates through the dataloader, encodes every image through the
         frozen CLIP vision encoder, and collects the results.
-
-        Returns
-        -------
-        all_features : np.ndarray, shape (N, D)
-            Pooled image features for every sample.
-        all_labels : np.ndarray, shape (N,)
-            Corresponding integer labels.
         """
+
         all_features = []
         all_labels = []
 
@@ -352,20 +205,8 @@ class LinearProbeCLIP:
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict class labels for a batch of images.
-
-        Parameters
-        ----------
-        images : torch.Tensor
-            Batch of preprocessed images, shape (B, 3, 224, 224).
-
-        Returns
-        -------
-        predictions : torch.Tensor
-            Predicted class indices, shape (B,).
-        probabilities : torch.Tensor
-            Class probability distribution, shape (B, num_classes).
-            These come from the Logistic Regression's softmax output.
         """
+
         if not self._is_fitted:
             raise RuntimeError(
                 "LinearProbeCLIP has not been fitted yet. Call fit() first."
@@ -387,9 +228,7 @@ class LinearProbeCLIP:
         return predictions, probabilities
 
 
-# ============================================================================
-# Quick smoke test
-# ============================================================================
+# test
 if __name__ == "__main__":
     try:
         from src.dataset import get_dataloaders

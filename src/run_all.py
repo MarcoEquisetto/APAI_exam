@@ -1,59 +1,3 @@
-"""
-run_all.py — Confronto unificato di tutti i metodi su tutti i dataset
-=====================================================================
-
-Allena e valuta ogni metodo sullo stesso split, per ogni dataset, e produce
-la tabella comparativa finale, i plot unificati e una t-SNE visualization.
-
-Protocollo
-----------
-
-Perché il confronto significhi qualcosa, tre cose devono essere uguali per
-tutti i metodi messi sullo stesso grafico:
-
-1. **La supervisione.**  ``--shots K`` addestra ogni metodo sullo *stesso*
-   support set K-shot, estratto con un seed fisso da ``src/few_shot.py``.
-   ``--shots 0`` usa l'intero training split (regime full-shot).
-   Confrontare CoOp addestrato su 160 immagini con un Linear Probe
-   addestrato su 21.600 misura anche un fattore 135 di supervisione.
-2. **Il budget.**  ``--epochs`` vale per tutti i metodi addestrabili.
-   L'*ottimizzatore* resta invece quello del paper di ciascun metodo (SGD
-   per CoOp, AdamW per adapter e LoRA): quello fa parte del metodo, le
-   epoche no.
-3. **La varianza.**  ``--seeds`` ripete ogni metodo addestrabile su più
-   semi e riporta media ± deviazione standard.  I metodi training-free
-   (Zero-Shot, Ensemble, Optimal Transport) sono deterministici e girano
-   una volta sola.
-
-**Limite noto, da dichiarare nel report:** non esiste uno split di
-validazione.  ``val_loader`` è il test set, quindi le curve per epoca e il
-"Best Val" stampato sono accuratezza di test, e gli iperparametri sono stati
-scelti con il test visibile.  È una pratica diffusa nella letteratura
-few-shot su CLIP, ma va scritta, non nascosta.
-
-Usage
------
-::
-
-    # Griglia principale: 16-shot, budget appaiato, tre semi
-    python src/run_all.py --shots 16 --seeds 0 1 2 --epochs 10
-
-    # Riferimento full-shot (un solo seme)
-    python src/run_all.py --shots 0 --seeds 0 --epochs 10
-
-    # Un dataset alla volta (consigliato: un'interruzione non perde tutto)
-    python src/run_all.py --dataset eurosat --shots 16 --seeds 0 1 2
-
-    # Prova rapida end-to-end, pochi minuti
-    python src/run_all.py --dataset eurosat --shots 16 --seeds 0 --epochs 2 --no-tsne
-
-    # Salta Optimal Transport (molto lento su >10 classi)
-    python src/run_all.py --skip-slow
-
-    # Rigenera SOLO le figure dai risultati già su disco, senza GPU
-    python src/run_all.py --plots-only
-"""
-
 import sys
 import os
 import io
@@ -64,9 +8,6 @@ import contextlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# ---------------------------------------------------------------------------
-# Path setup (same convention as the rest of the project).
-# ---------------------------------------------------------------------------
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parent
 if str(FILE_DIR) not in sys.path:
@@ -74,9 +15,6 @@ if str(FILE_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# ---------------------------------------------------------------------------
-# SSL fix (same as engine.py — needed on Windows for dataset downloads).
-# ---------------------------------------------------------------------------
 import ssl
 import certifi
 
@@ -89,9 +27,7 @@ def _create_ssl_context(purpose=ssl.Purpose.SERVER_AUTH, *, cafile=None,
 ssl.create_default_context = _create_ssl_context
 ssl._create_default_https_context = _create_ssl_context
 
-# ---------------------------------------------------------------------------
 # Project imports.
-# ---------------------------------------------------------------------------
 import torch
 import numpy as np
 import matplotlib
@@ -144,10 +80,7 @@ RESULTS_DIR = PROJECT_ROOT / "plots"
 RESULTS_JSON = RESULTS_DIR / "unified_results.json"
 
 
-# ============================================================================
 # Dataset registry
-# ============================================================================
-
 DATASET_REGISTRY: Dict[str, Dict[str, Any]] = {
     "eurosat": {
         "class_names": EUROSAT_CLASS_NAMES,
@@ -185,19 +118,6 @@ def load_data(
 ) -> Tuple[Any, Any, Any, Dict[str, Any]]:
     """
     Load train/test loaders, the raw train dataset, and dataset metadata.
-
-    Parameters
-    ----------
-    shots : int
-        ``0`` → full training split.  ``K > 0`` → a K-shot support set drawn
-        by ``few_shot.build_few_shot_loader()``, the same one for **every**
-        method, so the comparison holds supervision fixed.
-    seed : int
-        Seed of the support-set draw (ignored when ``shots == 0``).
-
-    Returns
-    -------
-    train_loader, test_loader, train_dataset, info
     """
     cfg = DATASET_REGISTRY[dataset_name]
 
@@ -233,25 +153,10 @@ def load_data(
     return train_loader, test_loader, train_dataset, info
 
 
-# ============================================================================
 # Per-method training recipes
-# ============================================================================
-# The optimizer, its learning rate and the weight decay are part of the
-# method as published; the epoch count is not, and is therefore driven by a
-# single ``--epochs`` so that no method is handed a larger budget than the
-# one it is being compared against.
-# ============================================================================
-
 RECIPES: Dict[str, Dict[str, Any]] = {
-    # CoOp: SGD + momentum, as in Zhou et al. (2022).
     "CoOp": {"optimizer_type": "sgd", "lr": 2e-3, "momentum": 0.9},
-    # CLIP-Adapter: AdamW, as in Gao et al. (2024).
     "CLIP-Adapter": {"optimizer_type": "adamw", "lr": 1e-3},
-    # Joint model: AdamW, the recipe of the half with the most parameters.
-    # Training it with CoOp's SGD (the first version of this script) left the
-    # adapter's near-zero-initialized weights essentially where they started
-    # and made the joint model lose to the plain adapter on all three
-    # datasets.  See CoOpAdapterModel.trainable_param_groups().
     "CoOp+Adapter": {"optimizer_type": "adamw", "lr": 1e-3},
     "LoRA": {"optimizer_type": "adamw", "lr": 1e-4},
     "Tip-Adapter-F": {"lr": 1e-3},
@@ -264,12 +169,6 @@ def _finish(
 ) -> Dict[str, Any]:
     """
     Attach the training history to a metrics dict.
-
-    The per-epoch GPU memory series (``gpu_mb`` and ``gpu_epoch_mb``) are
-    **kept**.  An earlier version of this file stripped them right here,
-    which is why the brief's "Memory Usage vs. Epochs" figure could not be
-    drawn: the data was collected by ``engine.train()`` and thrown away one
-    function call later.
     """
     if history is not None:
         metrics["history"] = history
@@ -285,16 +184,7 @@ def _release(model) -> None:
         torch.cuda.empty_cache()
 
 
-# ============================================================================
 # Method runners
-# ============================================================================
-# Each function trains (if needed) and evaluates a single method, returning
-# the metrics dict from engine.evaluate().  Any function that builds a model
-# extracts its t-SNE features *before* releasing it: the features of a
-# deleted model cannot be recovered afterwards, which is exactly how the
-# t-SNE figure ended up with a single panel.
-# ============================================================================
-
 def run_zero_shot(
     clip_wrapper: BaseCLIPWrapper,
     test_loader,
@@ -450,9 +340,6 @@ def run_clip_adapter(
     )
     _finish(metrics, history)
 
-    # Extract the ADAPTED features while the trained model still exists.
-    # This is the panel the t-SNE figure is for: frozen features next to
-    # the ones the adapter produced.
     if tsne_sink is not None:
         tsne_sink["CLIP-Adapter"] = extract_features(model, test_loader)
 
@@ -472,12 +359,6 @@ def run_joint(
 ) -> Dict[str, Any]:
     """
     Joint CoOp + CLIP-Adapter: text and vision adapted together.
-
-    The two halves go into two optimizer groups (see
-    ``CoOpAdapterModel.trainable_param_groups``), under AdamW rather than
-    CoOp's SGD.  With one SGD rate for everything the adapter contributed
-    essentially nothing and the joint model scored *below* the plain
-    adapter — a configuration artefact that read like a finding.
     """
     torch.manual_seed(seed)
     recipe = RECIPES["CoOp+Adapter"]
@@ -530,21 +411,6 @@ def run_tip_adapter(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Tip-Adapter (training-free cache) + Tip-Adapter-F (fine-tuned cache).
-
-    The cache is built from a **K-shot support set**, not from the whole
-    training split.  Building it from everything turns Tip-Adapter into a
-    nearest-neighbour index over 21.600 images and makes Tip-Adapter-F
-    report 11.059.200 "trainable parameters" — a number that is technically
-    correct (the keys really are optimized) and completely incomparable with
-    the 8.192 of CoOp on the same axis.
-
-    The support set comes from ``few_shot.build_few_shot_loader`` with the
-    run's seed, so it is the *same* one the trained methods saw and it does
-    not depend on the shuffle order of the training loader, as it did when
-    the cache was filled by consuming ``train_loader`` until every class had
-    enough samples.
-
-    Returns two metrics dicts: ``(tip_metrics, tipf_metrics)``.
     """
     torch.manual_seed(seed)
 
@@ -629,35 +495,10 @@ def run_lora(
     return metrics
 
 
-# ============================================================================
 # Aggregation over seeds
-# ============================================================================
-
 def aggregate_runs(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Collapse several seeds of the same method into one record.
-
-    A single run reports a number; several runs report a number **and how
-    much it moves**.  Without the second one, a 1,2-point gap between two
-    methods cannot be called a result.
-
-    The aggregate keeps the mean of every scalar metric, the standard
-    deviation of the accuracies, the full list of per-seed accuracies (so
-    the report can quote the spread), and the artefacts of the *first* seed
-    only — history, predictions and labels — because averaging a confusion
-    matrix across seeds would mean something different from what the figure
-    claims to show.
-
-    Parameters
-    ----------
-    runs : List[dict]
-        Metrics dicts from ``engine.evaluate()``, one per seed.
-
-    Returns
-    -------
-    aggregate : dict
-        Same keys as a single run, plus ``top1_std``, ``top5_std``,
-        ``top1_runs`` and ``n_seeds``.
     """
     if not runs:
         return {}
@@ -668,9 +509,6 @@ def aggregate_runs(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     base["top1_accuracy"] = float(np.mean(top1))
     base["top5_accuracy"] = float(np.mean(top5))
-    # ddof=1 (sample std) with a single seed would be NaN; report 0 instead,
-    # which is what "we did not measure the spread" should look like on a
-    # plot with error bars.
     base["top1_std"] = float(np.std(top1, ddof=1)) if len(top1) > 1 else 0.0
     base["top5_std"] = float(np.std(top5, ddof=1)) if len(top5) > 1 else 0.0
     base["top1_runs"] = [float(x) for x in top1]
@@ -684,10 +522,7 @@ def aggregate_runs(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     return base
 
 
-# ============================================================================
 # t-SNE feature extraction
-# ============================================================================
-
 @torch.no_grad()
 def extract_features(
     model, dataloader, max_samples: int = 500,
@@ -723,11 +558,7 @@ def extract_features(
     return feats_all.numpy(), labs_all.numpy()
 
 
-# ============================================================================
 # Plotting
-# ============================================================================
-
-# Methods in presentation order for the plots.
 METHOD_ORDER = [
     "ZeroShot", "ZeroShot-Ensemble", "LinearProbe", "OptimalTransport",
     "CoOp", "CLIP-Adapter", "CoOp+Adapter", "Tip-Adapter", "Tip-Adapter-F",
@@ -836,12 +667,6 @@ def plot_accuracy_vs_params(
 ) -> None:
     """
     Scatter plot: Accuracy vs Trainable Parameters (log scale).
-
-    This is THE figure of the project — it answers "how much accuracy does
-    each parameter buy?".  Colour encodes the method, marker shape the
-    dataset, and both get their own legend: reading the dataset off a text
-    annotation next to every point, as this figure used to require, does not
-    survive ten methods on three datasets.
     """
     fig, ax = plt.subplots(figsize=(11, 6.5))
 
@@ -864,9 +689,6 @@ def plot_accuracy_vs_params(
                 edgecolors="white", linewidths=0.6, zorder=3,
             )
 
-    # Two legends: one for the colours (methods), one for the shapes
-    # (datasets).  Matplotlib keeps only the last one added unless the first
-    # is re-attached by hand.
     method_handles = [
         plt.Line2D([], [], marker="o", linestyle="", markersize=8,
                    markerfacecolor=METHOD_COLORS[m], markeredgecolor="white",
@@ -880,9 +702,7 @@ def plot_accuracy_vs_params(
                    label=DATASET_REGISTRY[ds]["short_name"])
         for ds in results
     ]
-    # Both legends sit OUTSIDE the axes: with ten methods on three datasets
-    # every corner of the plotting area holds points, and a legend box
-    # anywhere inside covers some of them.
+
     method_legend = ax.legend(
         handles=method_handles, fontsize=8, title="Method",
         loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0,
@@ -902,10 +722,6 @@ def plot_accuracy_vs_params(
     )
     ax.grid(alpha=0.3)
 
-    # No tight_layout() here: it lays out the axes without knowing about the
-    # two legends parked outside them, and savefig's tight bounding box then
-    # crops the longer method names. Naming the legends as extra artists is
-    # what makes the saved box include them.
     out = save_dir / "accuracy_vs_params_unified.png"
     fig.savefig(
         out, dpi=150, bbox_inches="tight",
@@ -919,17 +735,7 @@ def plot_training_cost(
     results: Dict[str, Dict[str, Dict[str, Any]]],
     save_dir: Path,
 ) -> None:
-    """
-    Training wall-clock time per method — the resource axis that actually
-    discriminates.
 
-    Peak GPU memory does not: every method in this project sits within a few
-    tens of MB of the others, because the frozen 86M-parameter backbone
-    dominates and none of the adaptation modules is large enough to matter.
-    That is a finding, and it belongs in the report — but it means the
-    "resource investment" the brief asks about has to be read on the clock,
-    not on the memory gauge.
-    """
     datasets = list(results.keys())
     methods = [
         m for m in _all_methods(results)
@@ -983,14 +789,6 @@ def plot_tsne(
 ) -> None:
     """
     t-SNE of image features, one panel per method.
-
-    The comparison the figure exists for is *frozen vs adapted*: the
-    Zero-Shot panel shows what the backbone produces on its own, the others
-    what each adaptation method makes of it.  Each panel is annotated with
-    its **silhouette score** on the class labels, so the reader is not asked
-    to judge cluster separation by eye — t-SNE layouts are not comparable
-    across panels, silhouette scores computed in the original feature space
-    are.
     """
     from sklearn.manifold import TSNE
     from sklearn.metrics import silhouette_score
@@ -1007,9 +805,6 @@ def plot_tsne(
     for idx, (method_name, (feats, labs)) in enumerate(features_dict.items()):
         ax = axes[0][idx]
 
-        # Silhouette on the ORIGINAL features, not on the 2-D embedding:
-        # t-SNE distances are not metric and two panels' layouts have no
-        # common scale.
         try:
             sil = silhouette_score(feats, labs, metric="cosine")
             sil_txt = f"silhouette {sil:.3f}"
@@ -1058,25 +853,13 @@ def plot_tsne(
     print(f"[Plot] Saved: {out}")
 
 
-# ============================================================================
 # Console tables + JSON export
-# ============================================================================
-
 def print_results_table(
     results: Dict[str, Dict[str, Dict[str, Any]]],
     run_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Print two Markdown tables for direct paste into the report.
-
-    **Two** tables, not one.  The previous version carried a single
-    ``Params`` column filled inside the loop over datasets, so it survived
-    only for the last one: with EuroSAT, DTD and Flowers102 in that order,
-    every row showed Flowers102's parameter count — the Linear Probe read
-    52.326 on the EuroSAT row where it is 5.130.  Accuracy varies by
-    dataset *and* parameter count varies by dataset (the classifier and the
-    cache both scale with the number of classes), so they need one table
-    each.
     """
     datasets = list(results.keys())
     methods = _all_methods(results)
@@ -1194,10 +977,7 @@ def load_predictions_npz(
                     ds_results[method]["all_labels"] = data[f"{method}__true"]
 
 
-# ============================================================================
 # Figures that need predictions, delegated to engine.py
-# ============================================================================
-
 def plot_per_dataset_diagnostics(
     results: Dict[str, Dict[str, Dict[str, Any]]],
     dataset_name: str,
@@ -1250,11 +1030,6 @@ def plot_memory_from_results(
     remembering: ``engine.train()`` collected the per-epoch series all along,
     and this script used to delete it from ``history`` before saving. The
     plotting function existed too, and nothing called it.
-
-    One figure per dataset because the curves are not comparable across
-    datasets: a full-shot EuroSAT epoch is 338 batches and a 16-shot DTD one
-    is 24, so the peaks are reached at different points for reasons that
-    have nothing to do with the methods.
     """
     for ds_name, ds_results in results.items():
         histories = {
@@ -1283,10 +1058,7 @@ def plot_memory_from_results(
         tmp.rmdir()
 
 
-# ============================================================================
 # Main
-# ============================================================================
-
 def run_dataset(
     dataset_name: str,
     device: str,
@@ -1301,13 +1073,6 @@ def run_dataset(
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Tuple[np.ndarray, np.ndarray]]]:
     """
     Run all methods on a single dataset. Returns ``(results, tsne_features)``.
-
-    Training-free methods (Zero-Shot, Ensemble, Optimal Transport) are
-    deterministic and run once.  Everything with trainable parameters runs
-    once per seed and is aggregated by ``aggregate_runs``.  The Linear Probe
-    is in between: sklearn's L-BFGS is deterministic given the features, but
-    in few-shot mode the *support set* depends on the seed, so it repeats
-    too.
     """
     short = DATASET_REGISTRY[dataset_name]["short_name"]
     print(f"\n{'#' * 70}")
@@ -1317,11 +1082,6 @@ def run_dataset(
     results: Dict[str, Dict[str, Any]] = {}
     tsne_feats: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
 
-    # ------------------------------------------------------------------
-    # Data.  In full-shot mode the loaders do not depend on the seed, so we
-    # build them once; in few-shot mode the support set is re-drawn per seed
-    # inside the loop below.
-    # ------------------------------------------------------------------
     train_loader, test_loader, train_dataset, info = load_data(
         dataset_name, batch_size=batch_size, num_workers=num_workers,
         shots=shots, seed=seeds[0],
@@ -1340,9 +1100,6 @@ def run_dataset(
         )
         return tl, te, td, nfo
 
-    # ------------------------------------------------------------------
-    # Training-free baselines (share one frozen backbone to save memory).
-    # ------------------------------------------------------------------
     print(f"\n--- Training-free baselines ({short}) ---")
     clip_wrapper = BaseCLIPWrapper(device=device)
 
@@ -1396,9 +1153,7 @@ def run_dataset(
 
     _release(clip_wrapper)
 
-    # ------------------------------------------------------------------
     # Trainable methods (each loads its own CLIP copy).
-    # ------------------------------------------------------------------
     print(f"\n--- Trainable methods ({short}) "
           f"| {epochs} epochs | seeds {seeds} ---")
 
@@ -1567,10 +1322,8 @@ def main() -> None:
         if ds_tsne:
             all_tsne.update(ds_tsne)
 
-    # ------------------------------------------------------------------
     # Output.  Every figure in plots/ comes out of this one block, so the
     # directory can never again hold two generations that disagree.
-    # ------------------------------------------------------------------
     print_results_table(all_results, run_config)
     save_results_json(all_results, out_json, run_config)
     save_predictions_npz(all_results, RESULTS_DIR)

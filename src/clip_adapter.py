@@ -45,25 +45,6 @@ except ModuleNotFoundError:
 class VisionAdapterModule(nn.Module):
     """
     Bottleneck MLP Adapter with Residual Blending for Vision Features.
-
-    Params:
-    embed_dim : int
-        Input and output embedding dimension (e.g., 512 for ViT-B/32).
-    reduction_ratio : int
-        Bottleneck reduction factor. Hidden dim = embed_dim // reduction_ratio.
-        Default is 4 (512 -> 128 -> 512).
-    alpha : float
-        Blending parameter between adapted features and original features.
-        f_final = alpha * MLP(f_orig) + (1 - alpha) * f_orig
-    learnable_alpha : bool
-        False (default) -> alpha is a fixed hyperparameter, as in the
-        CLIP-Adapter paper and as required by the alpha sweep.
-        True -> alpha is trained together with the MLP.
-    constrain_alpha : bool
-        Only meaningful when learnable_alpha is True. Keeps alpha inside
-        (0, 1) by learning its logit and applying a sigmoid, so the residual
-        blend stays an interpolation. Set False to reproduce older runs
-        that trained an unconstrained alpha.
     """
 
     def __init__(
@@ -82,23 +63,6 @@ class VisionAdapterModule(nn.Module):
         self.learnable_alpha = learnable_alpha
         self.constrain_alpha = constrain_alpha
 
-        # ------------------------------------------------------------------
-        # Alpha: fixed hyperparameter or learned scalar?
-        #
-        # Both are legitimate experiments and the project reports them as
-        # two separate ones.  They cannot be merged: an alpha sweep only
-        # means something if alpha stays where it is put, and the sweep
-        # numbers in the results tables were produced with a fixed alpha.
-        #
-        # When learned, alpha is stored as a *logit* and squashed through a
-        # sigmoid in forward().  The residual blend
-        #     f = a * MLP(f) + (1 - a) * f
-        # is an interpolation only for a in [0, 1]; an unconstrained
-        # parameter is free to leave that range and turn the blend into an
-        # extrapolation, which is a different model from the one the brief
-        # describes.  Parameterizing the logit keeps a in (0, 1) by
-        # construction, with no clamping and no gradient discontinuity.
-        # ------------------------------------------------------------------
         if learnable_alpha:
             if constrain_alpha:
                 a = float(min(max(alpha, 1e-4), 1.0 - 1e-4))
@@ -164,15 +128,6 @@ class VisionAdapterModule(nn.Module):
     def forward(self, f_orig: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for vision feature adaptation.
-
-        Params:
-        f_orig : torch.Tensor
-            Original L2-normalized image features from frozen CLIP vision encoder, shape (B, D).
-
-        Returns
-        -------
-        f_final : torch.Tensor
-            Adapted and L2-normalized feature vectors, shape (B, D).
         """
         # Pass through bottleneck MLP
         f_mlp = self.act(self.down_proj(f_orig))
@@ -190,40 +145,7 @@ class VisionAdapterModule(nn.Module):
 class CLIPAdapterModel(BaseCLIPWrapper):
     """
     Subclass of BaseCLIPWrapper with Vision CLIP-Adapter.
-
-    Overrides `get_image_features()` to route image embeddings through
-    `VisionAdapterModule`. `get_text_features()` remains the frozen CLIP
-    text encoding baseline.
-
-    Params:
-    model_name : str
-        OpenCLIP model architecture, e.g. "ViT-B-32".
-    pretrained : str
-        Pretrained weights tag.
-    device : str
-        "cuda" or "cpu".
-    reduction_ratio : int
-        Bottleneck reduction ratio for the vision adapter.
-    alpha : float
-        Residual blending hyperparameter.
-    learnable_alpha : bool
-        Train alpha alongside the MLP instead of holding it fixed.
-        Default False: the alpha sweep is only meaningful with a fixed
-        alpha, so "fixed alpha" and "learned alpha" stay two distinct
-        experiments.
-    constrain_alpha : bool
-        Keep a learned alpha inside (0, 1) via a sigmoid. Ignored when
-        learnable_alpha is False.
-    class_names : List[str]
-        Raw class names, e.g. ["forest", "river", ...].
-    prompt_template : str
-        Template wrapped around each class name. Defaults to the EuroSAT
-        one; pass the dataset's own template (available as
-        `loader.dataset.prompt_template`) when running on DTD or
-        Flowers102, otherwise the prompts are nonsense and accuracy drops
-        with no error.
     """
-
 
     def __init__(
         self,
@@ -261,11 +183,7 @@ class CLIPAdapterModel(BaseCLIPWrapper):
             constrain_alpha=constrain_alpha,
         ).to(device)
 
-        # Cache text prototypes for anyone reading them directly.  Note that
-        # predict() no longer uses this cache: it is inherited from
-        # BaseCLIPWrapper, which recomputes the prototypes on every call so
-        # that the same method also works for models whose text side is
-        # being trained (CoOp, and the joint CoOp + adapter model).
+        # Cache text prototypes for anyone reading them directly.
         self._update_text_prototypes()
 
 
@@ -284,14 +202,6 @@ class CLIPAdapterModel(BaseCLIPWrapper):
     def get_image_features(self, images: torch.Tensor) -> torch.Tensor:
         """
         Extract image features from frozen CLIP vision encoder, then pass them through the trainable VisionAdapterModule.
-
-        Params:
-        images : torch.Tensor
-            Batch of preprocessed images, shape (B, 3, 224, 224).
-
-        Return:
-        adapted_image_features : torch.Tensor
-            L2-normalized feature vectors, shape (B, D).
         """
         images = images.to(self.device)
 
@@ -308,21 +218,6 @@ class CLIPAdapterModel(BaseCLIPWrapper):
     def set_alpha(self, new_alpha: float) -> None:
         """Dynamically update the residual blending factor alpha."""
         self.adapter.alpha = new_alpha
-
-    # predict() is deliberately NOT defined here.
-    #
-    # It used to be a verbatim copy of the base-class implementation, and
-    # the joint CoOp + CLIP-Adapter model ended up inheriting two rival
-    # copies of the same three lines.  BaseCLIPWrapper.predict() now does
-    # the job for every method whose scoring rule is "cosine similarity
-    # against the text prototypes" — which is this one.
-    #
-    # The one behavioural difference is that the base version recomputes
-    # the text prototypes on each call instead of reading the cache built
-    # in __init__.  That costs ten short prompts through the text tower and
-    # it is what makes the same method correct when the text side is also
-    # being trained.
-
 
 
 class TipAdapterModel(BaseCLIPWrapper):

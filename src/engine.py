@@ -1,27 +1,3 @@
-"""
-engine.py — Training Loop, Evaluation Loop & W&B Logging
-==========================================================
-
-This module provides the unified infrastructure that ALL models in the
-project share:
-
-  1. ``evaluate()``  — model-agnostic evaluation (Top-1, Top-5, GPU memory).
-  2. ``train()``     — generic training loop for Carlo's CoOp and Marco's
-                       CLIP-Adapter (any BaseCLIPWrapper subclass with
-                       trainable parameters).
-  3. ``run_all_evaluations()`` — convenience: runs all baselines at once.
-  4. ``plot_comparative_results()`` — generates Accuracy vs. Params,
-                                      Memory Usage, and combined plots.
-
-**Integration contract for Carlo & Marco:**
-
-    Carlo subclasses ``BaseCLIPWrapper`` and overrides ``get_text_features()``.
-    Marco subclasses ``BaseCLIPWrapper`` and overrides ``get_image_features()``.
-    Both call ``engine.train(model, train_loader, ...)`` to optimize their
-    trainable parameters, then ``engine.evaluate(model_or_wrapper, ...)``
-    for final metrics.
-"""
-
 import sys
 import os
 from pathlib import Path
@@ -38,9 +14,6 @@ import ssl
 import certifi
 
 
-# Fix SSL certificate error on Windows: the Windows Certificate Store
-# contains a malformed certificate that crashes OpenSSL. We monkey-patch
-# ssl.create_default_context to use certifi's CA bundle instead.
 def _create_ssl_context(purpose=ssl.Purpose.SERVER_AUTH, *, cafile=None, capath=None, cadata=None):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.load_verify_locations(cafile=certifi.where())
@@ -67,21 +40,10 @@ from typing import Dict, Any, Optional, List
 matplotlib.use("Agg")
 
 
-# ============================================================================
 # Utility functions
-# ============================================================================
-
 def count_trainable_parameters(model: Any) -> int:
     """
     Count the number of trainable parameters in a model.
-
-    Works with:
-      - nn.Module subclasses (BaseCLIPWrapper and adapters):
-        counts parameters with requires_grad=True.
-      - LinearProbeCLIP (scikit-learn based):
-        counts the number of coefficients in the logistic regression.
-      - OptimalTransportCLIP:
-        returns 0 (no trainable parameters — it's a distance-based method).
     """
     # Case 1: nn.Module (BaseCLIPWrapper, future adapters)
     if hasattr(model, "count_trainable_params"):
@@ -122,10 +84,7 @@ def _get_gpu_memory_mb() -> Dict[str, float]:
     }
 
 
-# ============================================================================
 # Evaluation Loop
-# ============================================================================
-
 @torch.no_grad()
 def evaluate(
     model: Any,
@@ -137,44 +96,8 @@ def evaluate(
 ) -> Dict[str, Any]:
     """
     Evaluate a model on a dataset and log results to wandb.
-
-    This function is model-agnostic: it calls ``model.predict(images)``
-    and expects back a tuple of ``(predictions, scores)``.  The scores
-    can be similarities (higher = better, for ZeroShot) or distances
-    (lower = better, for OT) — we handle both cases.
-
-    Parameters
-    ----------
-    model : Any
-        Must have a ``.predict(images)`` method that returns
-        ``(predictions: Tensor, scores: Tensor)``.
-        - predictions: (B,) int tensor of predicted class indices.
-        - scores: (B, num_classes) float tensor.
-    dataloader : DataLoader
-        Test set dataloader from dataset.py.
-    model_name : str
-        Human-readable name for logging (e.g., "ZeroShot", "LinearProbe").
-    use_wandb : bool
-        Whether to log metrics to Weights & Biases.
-    wandb_project : str
-        W&B project name.
-    wandb_config : Optional[Dict]
-        Extra configuration to log to W&B (e.g., hyperparameters).
-
-    Returns
-    -------
-    metrics : Dict[str, Any]
-        Dictionary containing:
-        - "top1_accuracy": float
-        - "top5_accuracy": float
-        - "trainable_params": int
-        - "total_samples": int
-        - "eval_time_seconds": float
-        - "gpu/*": GPU memory metrics
     """
-    # ----------------------------------------------------------------
     # Initialize wandb run (if enabled).
-    # ----------------------------------------------------------------
     if use_wandb:
         config = {"model_name": model_name}
         if wandb_config:
@@ -189,9 +112,7 @@ def evaluate(
 
     trainable_params = count_trainable_parameters(model)
 
-    # ----------------------------------------------------------------
     # Evaluation loop
-    # ----------------------------------------------------------------
     correct_top1 = 0
     correct_top5 = 0
     total_samples = 0
@@ -243,9 +164,7 @@ def evaluate(
 
 
 
-    # ----------------------------------------------------------------
     # Compute final metrics
-    # ----------------------------------------------------------------
     eval_time = time.time() - start_time
     top1_accuracy = correct_top1 / total_samples * 100
     top5_accuracy = correct_top5 / total_samples * 100
@@ -285,10 +204,7 @@ def evaluate(
     return metrics
 
 
-# ============================================================================
-# Training Loop (for Carlo's CoOp and Marco's CLIP-Adapter)
-# ============================================================================
-
+# Training Loop
 def train(
     model: nn.Module,
     train_loader: DataLoader,
@@ -312,107 +228,12 @@ def train(
 
     Designed for subclasses of ``BaseCLIPWrapper`` that add a small number
     of trainable parameters (learnable prompts, adapter MLPs, etc.) while
-    keeping the CLIP backbone frozen.
-
-    **Training protocol** (standard for CoOp / CLIP-Adapter):
-
-    1. Compute image features via ``model.get_image_features(images)``.
-    2. Compute text features via ``model.get_text_features(prompts)``.
-    3. Compute scaled cosine-similarity logits using CLIP's learned
-       temperature (``logit_scale``).
-    4. Cross-entropy loss against ground-truth labels.
-    5. Backprop through **only** the trainable parameters.
-
-    **Important for Carlo / Marco**:  Your overridden ``get_text_features``
-    or ``get_image_features`` methods must **NOT** use ``@torch.no_grad()``.
-    Gradients need to flow through your trainable parameters.  The frozen
-    backbone parameters have ``requires_grad=False``, so PyTorch will not
-    waste memory or compute on them.
-
-    Parameters
-    ----------
-    model : nn.Module
-        A ``BaseCLIPWrapper`` subclass with trainable parameters.
-        Must expose ``model.device``, ``model.model.logit_scale``,
-        ``model.get_image_features()``, and ``model.get_text_features()``.
-    train_loader : DataLoader
-        Training set dataloader (from ``dataset.py``).
-    val_loader : Optional[DataLoader]
-        Validation / test set dataloader.  If provided, Top-1 and Top-5
-        accuracy are computed after each epoch.
-    class_names : Optional[List[str]]
-        Raw class names (e.g., ``["forest", "river", ...]``).  If None,
-        defaults to ``EUROSAT_CLASS_NAMES``.
-    prompt_template : Optional[str]
-        Template applied to each class name, e.g.
-        ``"a satellite image of {}"``.  If None, falls back to the model's
-        own ``prompt_template`` attribute, and finally to the EuroSAT
-        default — so existing call sites are unaffected.
-
-        **Pass this whenever you train on something other than EuroSAT.**
-        Each dataset in ``dataset.py`` carries its own template
-        (``train_loader.dataset.prompt_template``): DTD wants
-        ``"a photo of a {} texture"`` and Flowers102 wants
-        ``"a photo of a {}, a type of flower"``.  Using the EuroSAT
-        template on DTD builds the prompt "a satellite image of banded",
-        which is meaningless — the run does not crash, it just quietly
-        loses accuracy.
-    epochs : int
-        Number of training epochs.
-    lr : float
-        Learning rate.  CoOp typically uses 2e-3 with SGD;  CLIP-Adapter
-        uses 1e-3 with AdamW.  Tune as needed.
-
-        A model that needs a *different* rate per module can define
-        ``trainable_param_groups(lr) -> List[dict]`` and receive ``lr`` as
-        the base value; see ``CoOpAdapterModel``.  Models that do not define
-        the method are unaffected.
-    optimizer_type : str
-        One of ``"sgd"``, ``"adam"``, ``"adamw"``.
-    weight_decay : float
-        Weight decay (L2 regularization).
-    momentum : float
-        Momentum for SGD (ignored for Adam / AdamW).
-    scheduler_type : str
-        ``"cosine"`` for cosine annealing with linear warmup, or
-        ``"none"`` to disable scheduling.
-    warmup_epochs : int
-        Number of linear warmup epochs (only used with cosine scheduler).
-    use_wandb : bool
-        Whether to log training curves to Weights & Biases.
-    wandb_project : str
-        W&B project name.
-    wandb_config : Optional[Dict]
-        Extra configuration to log.
-    model_name : str
-        Human-readable name for logging.
-
-    Returns
-    -------
-    history : Dict[str, Any]
-        Training history containing:
-        - ``"train_loss"``: list of per-epoch average loss
-        - ``"train_acc"``:  list of per-epoch training accuracy (%)
-        - ``"val_top1"``:   list of per-epoch validation Top-1 accuracy (%)
-        - ``"val_top5"``:   list of per-epoch validation Top-5 accuracy (%)
-        - ``"lr"``:         list of per-epoch learning rates
-        - ``"best_val_top1"``: best validation Top-1 accuracy
-        - ``"gpu_mb"``:      list of per-epoch GPU memory (MB)
-        - ``"peak_gpu_mb"``:   peak GPU memory during training
+    keeping the CLIP backbone frozen.   
     """
     try:
         from src.dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
     except ModuleNotFoundError:
         from dataset import EUROSAT_CLASS_NAMES, PROMPT_TEMPLATE
-
-    # ----------------------------------------------------------------
-    # Resolve the class set and the prompt template.
-    #
-    # Precedence: explicit argument → whatever the model was built with →
-    # EuroSAT default.  The middle step matters: a model constructed for
-    # DTD already knows its own class names and template, and forcing the
-    # caller to repeat them here is exactly how the two drift apart.
-    # ----------------------------------------------------------------
     if class_names is None:
         class_names = getattr(model, "class_names", None) or EUROSAT_CLASS_NAMES
     if prompt_template is None:
@@ -421,9 +242,6 @@ def train(
     # Build full text prompts from raw class names.
     prompts = [prompt_template.format(name) for name in class_names]
 
-    # ----------------------------------------------------------------
-    # Collect trainable parameters.  Only these will receive gradients.
-    # ----------------------------------------------------------------
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     if len(trainable_params) == 0:
         raise ValueError(
@@ -434,20 +252,6 @@ def train(
     n_trainable = sum(p.numel() for p in trainable_params)
     print(f"[{model_name}] Training {n_trainable:,} params | {epochs} epochs | LR={lr} | {optimizer_type}")
 
-    # ----------------------------------------------------------------
-    # Per-module optimizer groups (opt-in).
-    #
-    # A model composed of two independently designed modules — the joint
-    # CoOp + CLIP-Adapter model is the case in this project — cannot always
-    # be trained well with one learning rate for everything.  A model that
-    # needs a split defines ``trainable_param_groups(lr)`` and returns the
-    # groups; every other model in the project does not define it and gets
-    # the flat list exactly as before, so this is behaviour-preserving.
-    #
-    # One optimizer with several groups, never several optimizers: the
-    # scheduler, the warmup and the ``history["lr"]`` series all assume a
-    # single optimizer, and splitting it would quietly desynchronize them.
-    # ----------------------------------------------------------------
     param_input = trainable_params
     if hasattr(model, "trainable_param_groups"):
         groups = model.trainable_param_groups(lr)
@@ -466,9 +270,7 @@ def train(
             for i, g in enumerate(groups)
         ))
 
-    # ----------------------------------------------------------------
     # Optimizer
-    # ----------------------------------------------------------------
     if optimizer_type == "sgd":
         optimizer = SGD(
             param_input, lr=lr,
@@ -485,11 +287,9 @@ def train(
     else:
         raise ValueError(f"Unknown optimizer_type: '{optimizer_type}'")
 
-    # ----------------------------------------------------------------
     # Learning rate scheduler
     # Cosine annealing with linear warmup is standard for both CoOp
     # and CLIP-Adapter.
-    # ----------------------------------------------------------------
     if scheduler_type == "cosine":
         if warmup_epochs > 0 and epochs > warmup_epochs:
             warmup = LinearLR(
@@ -510,9 +310,7 @@ def train(
     else:
         raise ValueError(f"Unknown scheduler_type: '{scheduler_type}'")
 
-    # ----------------------------------------------------------------
     # W&B initialization
-    # ----------------------------------------------------------------
     if use_wandb:
         config = {
             "model_name": model_name,
@@ -537,12 +335,7 @@ def train(
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    # ----------------------------------------------------------------
     # Training loop
-    # ----------------------------------------------------------------
-    # Put the model in train mode for adapter layers (dropout, etc.),
-    # but keep the frozen CLIP backbone in eval mode to avoid enabling
-    # dropout in pretrained transformer layers.
     model.train()
     model.model.eval()
 
@@ -552,17 +345,6 @@ def train(
         "val_top1": [],
         "val_top5": [],
         "lr": [],
-        # Per-epoch GPU memory.  The brief asks for a "Memory Usage vs.
-        # Epochs" plot, and a single end-of-run scalar cannot draw a curve.
-        # Two series are recorded because they answer different questions:
-        #   • gpu_mb      — running peak since the start of training,
-        #                   monotonically non-decreasing.  This is the
-        #                   number that tells you whether the run fits in
-        #                   5 GB of VRAM.
-        #   • gpu_epoch_mb — peak *within* that epoch alone, obtained by
-        #                   resetting the CUDA counter at the top of every
-        #                   epoch.  This is the one that shows a method's
-        #                   steady-state cost and makes methods comparable.
         "gpu_mb": [],
         "gpu_epoch_mb": [],
     }
@@ -575,11 +357,6 @@ def train(
         epoch_correct = 0
         epoch_total = 0
 
-        # Reset the CUDA peak counter so that ``max_memory_allocated()``
-        # measures this epoch alone.  The peak over the whole run is kept
-        # separately in ``running_peak_mb``: resetting the counter is what
-        # makes the per-epoch series meaningful, but it would otherwise
-        # throw away the global peak the brief also asks for.
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
 
@@ -587,40 +364,28 @@ def train(
             images = images.to(model.device)
             labels = labels.to(model.device)
 
-            # ----------------------------------------------------------
             # Forward pass
-            # ----------------------------------------------------------
-            # Image features: (B, D) — goes through adapter for Marco.
             image_features = model.get_image_features(images)
-            # Text features:  (C, D) — goes through learnable prompts
-            # for Carlo.  For base/Marco models, this is the standard
-            # frozen text encoding.
             text_features = model.get_text_features(prompts)
 
             # Scale by CLIP's learned temperature parameter.
             logit_scale = model.model.logit_scale.exp()
             logits = logit_scale * (image_features @ text_features.T)
 
-            # ----------------------------------------------------------
             # Loss & backward
-            # ----------------------------------------------------------
             loss = F.cross_entropy(logits, labels)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # ----------------------------------------------------------
             # Track batch metrics
-            # ----------------------------------------------------------
             batch_size = images.shape[0]
             epoch_loss += loss.item() * batch_size
             epoch_correct += (logits.argmax(dim=-1) == labels).sum().item()
             epoch_total += batch_size
 
-        # ==============================================================
         # End of epoch
-        # ==============================================================
         avg_loss = epoch_loss / epoch_total
         train_acc = epoch_correct / epoch_total * 100
         current_lr = optimizer.param_groups[0]["lr"]
@@ -629,9 +394,6 @@ def train(
         history["train_acc"].append(train_acc)
         history["lr"].append(current_lr)
 
-        # Memory for this epoch, recorded *before* validation so the number
-        # reflects the training step (forward + backward + optimizer state)
-        # and is not contaminated by the validation batch size.
         epoch_peak_mb = _get_gpu_memory_mb()["gpu/max_allocated_mb"]
         running_peak_mb = max(running_peak_mb, epoch_peak_mb)
         history["gpu_epoch_mb"].append(epoch_peak_mb)
@@ -641,9 +403,7 @@ def train(
         if scheduler is not None:
             scheduler.step()
 
-        # ----------------------------------------------------------
         # Validation (if a val_loader is provided)
-        # ----------------------------------------------------------
         val_msg = ""
         if val_loader is not None:
             model.eval()
@@ -694,9 +454,7 @@ def train(
 
         print(f"  Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | Acc: {train_acc:.2f}%{val_msg}")
 
-        # ----------------------------------------------------------
         # Log to W&B
-        # ----------------------------------------------------------
         if use_wandb:
             log_dict = {
                 "epoch": epoch + 1,
@@ -711,16 +469,10 @@ def train(
                 log_dict.update(_get_gpu_memory_mb())
             wandb.log(log_dict)
 
-    # ================================================================
-    # Training complete — final summary
-    # ================================================================
     total_time = time.time() - start_time
     gpu_memory = _get_gpu_memory_mb()
 
     history["best_val_top1"] = best_val_acc
-    # NOT ``gpu_memory["gpu/max_allocated_mb"]``: the counter is reset at the
-    # top of every epoch, so reading it here would report the *last* epoch's
-    # peak rather than the run's.  ``running_peak_mb`` is the true maximum.
     history["peak_gpu_mb"] = max(
         running_peak_mb, gpu_memory.get("gpu/max_allocated_mb", 0.0)
     )
@@ -741,10 +493,6 @@ def train(
     return history
 
 
-# ============================================================================
-# Convenience: run all baselines
-# ============================================================================
-
 def run_all_evaluations(
     test_loader: DataLoader,
     device: str = "cuda",
@@ -756,65 +504,6 @@ def run_all_evaluations(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate the baselines — and any adapted models handed in — in one pass.
-
-    The baselines (Zero-Shot, Zero-Shot Ensemble, Linear Probe, Optimal
-    Transport) are parameter-free or cheap to fit, so this function builds
-    them itself.  The three workstreams' methods (CoOp, CLIP-Adapter,
-    Tip-Adapter, LoRA) must be **trained first** and passed in through
-    ``extra_models``: re-training them inside a function called
-    "run_all_evaluations" would be a surprising amount of work to trigger
-    by accident, and the training hyperparameters belong to whoever owns
-    the method.
-
-    Without ``extra_models`` the comparative figures show only the
-    baselines — two of which sit at zero trainable parameters — and the
-    "Accuracy vs. Trainable Parameters" trade-off that the project is
-    actually about does not appear at all.
-
-    Parameters
-    ----------
-    test_loader : DataLoader
-        Test set dataloader.
-    device : str
-        "cuda" or "cpu".
-    use_wandb : bool
-        Whether to log to W&B.
-    extra_models : Optional[Dict[str, Any]]
-        Already-trained models to evaluate alongside the baselines, keyed
-        by the name to show in the plots, e.g.::
-
-            coop = CoOpModel(device=device)
-            train(coop, few_shot_loader, epochs=100, lr=2e-3)
-
-            adapter = CLIPAdapterModel(device=device, reduction_ratio=4)
-            train(adapter, few_shot_loader, epochs=20, lr=1e-3,
-                  optimizer_type="adamw")
-
-            results = run_all_evaluations(
-                test_loader, device=device,
-                extra_models={"CoOp (M=16, 16-shot)": coop,
-                              "CLIP-Adapter (r=4)": adapter},
-            )
-
-        Each value only has to expose ``predict(images) -> (preds, scores)``,
-        which every subclass of ``BaseCLIPWrapper`` inherits.
-    clip_wrapper : Optional[Any]
-        Reuse an existing frozen backbone instead of loading a second copy.
-        On a 5 GB card this is the difference between fitting and not.
-    include_baselines : bool
-        Set to ``False`` to evaluate only ``extra_models`` — useful when
-        the baseline numbers are already on disk and only a new method
-        needs re-measuring.
-    train_loader : Optional[DataLoader]
-        Training data for the Linear Probe.  If None, a full-shot EuroSAT
-        loader is built.  **Pass a few-shot loader here** if the comparison
-        is meant to be at matched supervision: a Linear Probe fitted on
-        21,600 images is not comparable with CoOp fitted on 160.
-
-    Returns
-    -------
-    all_results : Dict[str, Dict[str, Any]]
-        Mapping from model name to its metrics dictionary.
     """
     try:
         from src.base_model import BaseCLIPWrapper
@@ -859,11 +548,9 @@ def run_all_evaluations(
             use_wandb=use_wandb,
         )
 
-    # ----------------------------------------------------------------
     # The three workstreams' methods.  Already trained by their owner —
     # this loop only measures them, through the very same evaluate() the
     # baselines went through, so the numbers are directly comparable.
-    # ----------------------------------------------------------------
     for name, model in (extra_models or {}).items():
         if not hasattr(model, "predict"):
             raise TypeError(
@@ -882,25 +569,13 @@ def run_all_evaluations(
     return all_results
 
 
-# ============================================================================
 # Comparative Plotting
-# ============================================================================
-
 def plot_comparative_results(
     all_results: Dict[str, Dict[str, Any]],
     save_dir: str = "./plots",
 ) -> None:
     """
     Generate and save comparative plots from evaluation results.
-
-    Produces three figures:
-      1. **Accuracy vs. Trainable Parameters** — bar chart comparing Top-1
-         and Top-5 accuracy for each model, with trainable param count
-         annotated on each bar.
-      2. **GPU Peak Memory & Eval Time** — side-by-side bar charts showing
-         peak GPU memory and inference time for each model.
-      3. **Combined Summary** — a single figure with all three panels
-         for easy inclusion in reports/presentations.
     """
     if save_dir == "./plots" and not os.path.exists("./plots"):
         save_dir = str(PROJECT_ROOT / "plots")
@@ -919,9 +594,7 @@ def plot_comparative_results(
     plt.style.use("seaborn-v0_8-darkgrid")
     colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#CCB974"]
 
-    # ================================================================
     # Figure 1: Accuracy vs. Trainable Parameters
-    # ================================================================
     fig1, ax1 = plt.subplots(figsize=(10, 6))
 
     x = np.arange(len(model_names))
@@ -983,9 +656,7 @@ def plot_comparative_results(
     )
     print(f"[Plot] Saved: {save_dir}/accuracy_vs_params.png")
 
-    # ================================================================
     # Figure 2: GPU Peak Memory & Eval Time
-    # ================================================================
     fig2, (ax2a, ax2b) = plt.subplots(1, 2, figsize=(12, 5))
 
     bars_mem = ax2a.bar(
@@ -1032,9 +703,7 @@ def plot_comparative_results(
     )
     print(f"[Plot] Saved: {save_dir}/resource_usage.png")
 
-    # ================================================================
     # Figure 3: Combined summary (for report / presentation)
-    # ================================================================
     fig3, axes = plt.subplots(1, 3, figsize=(18, 5))
 
     # Panel 1: Accuracy
@@ -1096,10 +765,7 @@ def plot_comparative_results(
     print(f"\n[Plot] All figures saved to '{save_dir}/'")
 
 
-# ============================================================================
 # Confusion Matrices
-# ============================================================================
-
 def plot_memory_vs_epochs(
     histories: Dict[str, Dict[str, Any]],
     save_dir: str = "./plots",
@@ -1111,29 +777,6 @@ def plot_memory_vs_epochs(
     The project treats resource cost as a first-class metric, not an
     afterthought, and this is the figure that shows it over time rather
     than as a single bar.
-
-    Parameters
-    ----------
-    histories : Dict[str, Dict[str, Any]]
-        Mapping from a method's name to the ``history`` dict returned by
-        ``train()``.  Any entry without a memory series is skipped with a
-        warning rather than crashing the whole figure.
-    save_dir : str
-        Output directory.  Same fallback logic as the other plots.
-    per_epoch : bool
-        ``True``  → plot ``history["gpu_epoch_mb"]``, the peak *within*
-        each epoch.  This is the fair comparison between methods: it shows
-        steady-state cost and it is flat for a well-behaved training loop.
-
-        ``False`` → plot ``history["gpu_mb"]``, the running peak since the
-        start.  Monotonically non-decreasing by construction, so the curve
-        is a staircase; useful to answer "does this run fit in 5 GB?".
-
-    Notes
-    -----
-    The two series are genuinely different measurements and mixing them up
-    produces a plot that looks like a memory leak when nothing is leaking.
-    The axis label states which one is being drawn.
     """
     if save_dir == "./plots" and not os.path.exists("./plots"):
         save_dir = str(PROJECT_ROOT / "plots")
@@ -1199,17 +842,6 @@ def plot_confusion_matrices(
     Values are **normalized per row** (i.e., each row sums to 1.0) so that
     the diagonal shows per-class recall.  This makes it easy to spot which
     classes are frequently confused.
-
-    Parameters
-    ----------
-    all_results : Dict[str, Dict[str, Any]]
-        Output from ``run_all_evaluations()``.  Each entry must contain
-        ``"all_predictions"`` and ``"all_labels"`` arrays.
-    class_names : Optional[List[str]]
-        Human-readable class names for axis labels.
-        Defaults to ``EUROSAT_CLASS_NAMES``.
-    save_dir : str
-        Directory where plots are saved.
     """
     try:
         from src.dataset import EUROSAT_CLASS_NAMES
@@ -1290,10 +922,7 @@ def plot_confusion_matrices(
     print(f"[Plot] Saved: {save_dir}/confusion_matrices.png")
 
 
-# ============================================================================
 # Per-Class Accuracy Comparison
-# ============================================================================
-
 def plot_per_class_metrics(
     all_results: Dict[str, Dict[str, Any]],
     class_names: Optional[List[str]] = None,
@@ -1301,23 +930,6 @@ def plot_per_class_metrics(
 ) -> None:
     """
     Generate a grouped bar chart comparing per-class accuracy across models.
-
-    For each class, we show the recall (= per-class accuracy) of every model
-    side by side.  This makes it easy to answer questions like:
-      - "Which classes does ZeroShot struggle with the most?"
-      - "Does Prompt Ensembling help uniformly, or only on specific classes?"
-      - "Is there a class where OT actually beats cosine similarity?"
-
-    Also prints a concise classification report to the console.
-
-    Parameters
-    ----------
-    all_results : Dict[str, Dict[str, Any]]
-        Output from ``run_all_evaluations()``.
-    class_names : Optional[List[str]]
-        Class names for labeling.
-    save_dir : str
-        Directory where plots are saved.
     """
     try:
         from src.dataset import EUROSAT_CLASS_NAMES
@@ -1406,9 +1018,6 @@ def plot_per_class_metrics(
     print(f"\n[Plot] Saved: {save_dir}/per_class_accuracy.png")
 
 
-# ============================================================================
-# Entry point: run this file directly to evaluate all baselines
-# ============================================================================
 if __name__ == "__main__":
     try:
         from src.dataset import get_dataloaders
@@ -1422,53 +1031,10 @@ if __name__ == "__main__":
         batch_size=64, num_workers=8, download=True
     )
 
-    # Baselines only.  To put CoOp / CLIP-Adapter / Tip-Adapter / LoRA on
-    # the same figures, train them first and hand them over:
-    #
-    #     from src.coop import CoOpModel
-    #     from src.clip_adapter import CLIPAdapterModel
-    #     from src.few_shot import build_few_shot_loader
-    #
-    #     support = build_few_shot_loader(train_loader.dataset, n_shots=16)
-    #
-    #     coop = CoOpModel(device=device)
-    #     h_coop = train(coop, support, epochs=100, lr=2e-3, use_wandb=False,
-    #                    model_name="CoOp")
-    #
-    #     adapter = CLIPAdapterModel(device=device, reduction_ratio=4)
-    #     h_adapter = train(adapter, support, epochs=20, lr=1e-3,
-    #                       optimizer_type="adamw", use_wandb=False,
-    #                       model_name="CLIP-Adapter")
-    #
-    #     results = run_all_evaluations(
-    #         test_loader, device=device, use_wandb=False,
-    #         train_loader=support,          # matched supervision, see below
-    #         extra_models={"CoOp (M=16)": coop, "CLIP-Adapter (r=4)": adapter},
-    #     )
-    #     plot_memory_vs_epochs({"CoOp": h_coop, "CLIP-Adapter": h_adapter})
-    #
-    # Note the ``train_loader=support``: fitting the Linear Probe on all
-    # 21,600 images and CoOp on 160 puts two different experiments on one
-    # axis.  Whatever protocol is chosen, it has to be the same for every
-    # bar in the figure.
     results = run_all_evaluations(
         test_loader, device=device, use_wandb=False
     )
 
-    # ----------------------------------------------------------------
-    # Figures go to plots/baselines_only/, NOT to plots/.
-    #
-    # This entry point evaluates four baselines on EuroSAT.  ``run_all.py``
-    # evaluates ten methods on three datasets and writes to plots/ under
-    # some of the same file names.  When both wrote to the same directory
-    # the repository ended up carrying two generations of figures that told
-    # different stories — an "Accuracy vs. Trainable Parameters" chart with
-    # four bars next to a unified one with ten, both current, both wrong to
-    # cite without saying which is which.
-    #
-    # plots/ is now owned by run_all.py alone.  Everything produced here is
-    # a baseline-only sanity check and is filed as such.
-    # ----------------------------------------------------------------
     save_dir = str(PROJECT_ROOT / "plots" / "baselines_only")
 
     # Generate and save comparative plots.

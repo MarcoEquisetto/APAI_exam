@@ -1,31 +1,3 @@
-"""
-few_shot.py — K-shot sampling utilities  [Carlo]
-================================================
-
-**Why this file exists.**  ``dataset.py`` builds *full-shot* loaders: the
-whole EuroSAT training split, 21,600 images.  That is the right regime for a
-Linear Probe, but it is not the regime the adaptation methods studied here
-were designed for.  CoOp (Zhou et al., 2022), CLIP-Adapter (Gao et al., 2024)
-and Tip-Adapter (Zhang et al., 2022) are all *few-shot* methods: they are
-benchmarked with 1, 2, 4, 8 or 16 labelled images **per class**, and their
-selling point is precisely that a handful of trainable parameters can beat
-zero-shot CLIP when almost no data is available.
-
-Comparing an 8K-parameter prompt learner against a 262K-parameter adapter on
-21,600 images mostly measures capacity, and both saturate near the ceiling.
-Comparing them at 16 shots (160 images total for EuroSAT) measures what the
-project actually asks about: *how much accuracy does each parameter buy?*
-
-This module is intentionally dataset-agnostic and read-only with respect to
-``dataset.py``: it wraps whatever ``Dataset`` it is handed, so Mattia's and
-Marco's methods can be re-run in the same regime without any of us editing
-each other's files.
-
-The test split is never subsampled — few-shot refers to the *training* data
-only.  Evaluation always runs on the full test set, otherwise accuracies are
-not comparable across runs.
-"""
-
 import sys
 from pathlib import Path
 
@@ -44,10 +16,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 
 
-# ============================================================================
 # Label extraction
-# ============================================================================
-
 def extract_labels(dataset: Dataset) -> List[int]:
     """
     Recover the integer label of every sample **without decoding images**.
@@ -57,28 +26,8 @@ def extract_labels(dataset: Dataset) -> List[int]:
     sitting in a list on the torchvision object.  This function digs it out,
     handling the three wrappers defined in ``dataset.py``:
 
-    * ``EuroSATDataset`` — a ``Subset`` over a torchvision ``EuroSAT``
-      (an ``ImageFolder``, so labels live in ``.targets`` / ``.samples``);
-    * ``DTDDataset`` and ``Flowers102Dataset`` — direct wrappers whose
-      underlying torchvision object stores labels in ``._labels``.
-
-    If none of those attributes is found it falls back to iterating, which is
-    correct but slow; a warning is printed so the slowdown is not mysterious.
-
-    Parameters
-    ----------
-    dataset : Dataset
-        One of the wrappers from ``dataset.py`` (or any dataset whose items
-        are ``(image, label, text)``).
-
-    Returns
-    -------
-    labels : List[int]
-        One integer per sample, in dataset order.
     """
-    # ------------------------------------------------------------------
     # Unwrap: (underlying torchvision object, indices into it).
-    # ------------------------------------------------------------------
     if hasattr(dataset, "subset") and isinstance(dataset.subset, Subset):
         base = dataset.subset.dataset
         indices: Sequence[int] = dataset.subset.indices
@@ -89,9 +38,7 @@ def extract_labels(dataset: Dataset) -> List[int]:
         base = dataset
         indices = range(len(dataset))
 
-    # ------------------------------------------------------------------
     # Find the label list on the torchvision object.
-    # ------------------------------------------------------------------
     base_labels = None
     for attr in ("targets", "_labels", "labels"):
         if hasattr(base, attr):
@@ -110,10 +57,7 @@ def extract_labels(dataset: Dataset) -> List[int]:
     return [int(dataset[i][1]) for i in range(len(dataset))]
 
 
-# ============================================================================
 # K-shot sampling
-# ============================================================================
-
 def few_shot_indices(
     labels: Sequence[int], n_shots: int, seed: int = 42
 ) -> List[int]:
@@ -124,20 +68,6 @@ def few_shot_indices(
     same support set: without that, a difference between two runs could come
     from the draw rather than from the method being tested.  Classes with
     fewer than ``n_shots`` examples contribute everything they have.
-
-    Parameters
-    ----------
-    labels : Sequence[int]
-        Label of each sample, as returned by ``extract_labels``.
-    n_shots : int
-        Number of labelled examples per class (K).
-    seed : int
-        RNG seed for the draw.
-
-    Returns
-    -------
-    indices : List[int]
-        Sorted indices of the selected samples.
     """
     by_class: Dict[int, List[int]] = defaultdict(list)
     for idx, label in enumerate(labels):
@@ -168,31 +98,6 @@ def build_few_shot_loader(
 ) -> DataLoader:
     """
     Wrap a full training set into a K-shot ``DataLoader``.
-
-    Parameters
-    ----------
-    train_dataset : Dataset
-        The **training** split (never the test split).
-    n_shots : int
-        Labelled examples per class.  The brief's sweep is 1 / 2 / 4 / 8 / 16.
-    batch_size : int
-        Mini-batch size.  With 160 images total, 32 gives 5 steps per epoch,
-        so few-shot runs need many more epochs than full-shot ones to take a
-        comparable number of optimizer steps.
-    num_workers : int
-        Kept at 0 by default: on Windows, worker processes re-import the
-        module and the spawn overhead dwarfs the loading cost for a set this
-        small.
-    seed : int
-        Seed of the support-set draw.
-    shuffle : bool
-        Shuffle between epochs.
-
-    Returns
-    -------
-    loader : DataLoader
-        Yields ``(images, labels, text_descriptions)`` — the same contract as
-        every other loader in the project.
     """
     labels = extract_labels(train_dataset)
     indices = few_shot_indices(labels, n_shots=n_shots, seed=seed)
@@ -213,9 +118,7 @@ def build_few_shot_loader(
     )
 
 
-# ============================================================================
 # Smoke test
-# ============================================================================
 if __name__ == "__main__":
     try:
         from src.dataset import EuroSATDataset

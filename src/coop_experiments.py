@@ -1,33 +1,3 @@
-"""
-Runs the three ablations the brief asks for on the text side, plus the
-few-shot sweep that gives them meaning:
-
-* **context length** ``M in {4, 8, 16}``;
-* **Unified Context vs. Class-Specific Context (CSC)** — which generalizes
-  better with the same amount of supervision;
-* **learning rate**, tuned specifically for the text embeddings. 
-* **shots** ``K in {1, 2, 4, 8, 16}`` — the axis along which few-shot
-  adaptation is supposed to pay off.
-
-Every run reports Top-1 / Top-5 accuracy, the number of trainable parameters,
-peak GPU memory and wall-clock time, because in this project resource cost is
-a first-class metric and not an afterthought.
-
-Training goes through ``engine.train()`` and evaluation through
-``engine.evaluate()`` — no method reimplements the loop.
-
-Usage
------
-::
-
-    python src/coop_experiments.py --sweep ctx_len     # M = 4, 8, 16
-    python src/coop_experiments.py --sweep csc         # unified vs CSC
-    python src/coop_experiments.py --sweep lr          # LR search
-    python src/coop_experiments.py --sweep shots       # K = 1..16
-    python src/coop_experiments.py --sweep all
-    python src/coop_experiments.py --single --n-ctx 16 --shots 16 --epochs 50
-"""
-
 import sys
 from pathlib import Path
 
@@ -62,10 +32,7 @@ RESULTS_DIR = PROJECT_ROOT / "plots"
 RESULTS_JSON = RESULTS_DIR / "coop_results.json"
 
 
-# ============================================================================
 # Data plumbing
-# ============================================================================
-
 def build_test_loaders(
     batch_size: int = 64,
     num_workers: int = 0,
@@ -74,32 +41,6 @@ def build_test_loaders(
 ) -> tuple:
     """
     Build the full test loader plus a small validation loader.
-
-    Two loaders, two jobs:
-
-    * ``test_loader`` — the **entire** test split (5,400 images).  Used once,
-      at the end of a run, by ``engine.evaluate()``.  Never subsampled, or
-      accuracies stop being comparable with Mattia's and Marco's numbers.
-    * ``val_loader`` — a fixed random slice of the same split, used *during*
-      training to draw the per-epoch accuracy curve.  A full pass every epoch
-      would dominate the runtime of a 160-image few-shot run.
-
-    The slice is drawn with a fixed seed so every run sees the same one.
-
-    Parameters
-    ----------
-    batch_size, num_workers : int
-        Standard DataLoader settings.  ``num_workers=0`` is the safe default
-        on Windows.
-    val_subset : int
-        Size of the per-epoch validation slice.  ``0`` disables it, and
-        training runs without a validation curve.
-    seed : int
-        Seed of the slice.
-
-    Returns
-    -------
-    (test_loader, val_loader) : Tuple[DataLoader, Optional[DataLoader]]
     """
     test_dataset = EuroSATDataset(split="test", download=True)
 
@@ -126,11 +67,7 @@ def build_test_loaders(
 
     return test_loader, val_loader
 
-
-# ============================================================================
-# A single run
-# ============================================================================
-
+# Run
 def run_single_experiment(
     train_dataset: EuroSATDataset,
     test_loader: DataLoader,
@@ -149,17 +86,8 @@ def run_single_experiment(
 ) -> Dict[str, Any]:
     """
     Train one CoOp configuration and evaluate it on the full test set.
-
-    Returns
-    -------
-    result : Dict[str, Any]
-        Configuration, training history and final metrics, flattened into a
-        single JSON-serializable dictionary.
     """
     if tag is None:
-        # The tag is the key under which the run is stored, so it must name
-        # every axis that changes the result — epochs included, or a short
-        # debug run would silently overwrite a full one.
         kind = "csc" if class_specific else "unified"
         tag = f"CoOp_M{n_ctx}_{kind}_K{n_shots}_lr{lr:g}_e{epochs}"
 
@@ -167,8 +95,6 @@ def run_single_experiment(
     print(f"  {tag}")
     print("=" * 78)
 
-    # Reproducibility: the model init (random context vectors) and the
-    # support-set draw both depend on the seed.
     torch.manual_seed(seed)
 
     train_loader = build_few_shot_loader(
@@ -242,10 +168,7 @@ def run_single_experiment(
     return result
 
 
-# ============================================================================
 # Sweeps
-# ============================================================================
-
 def sweep_ctx_len(common: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Context length M in {4, 8, 16}, Unified Context."""
     return [
@@ -282,10 +205,7 @@ def sweep_shots(common: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-# ============================================================================
 # Persistence
-# ============================================================================
-
 def save_results(results: List[Dict[str, Any]], path: Path = RESULTS_JSON) -> None:
     """
     Append results to the project's JSON file, keyed by run tag.
@@ -316,15 +236,7 @@ def load_results(path: Path = RESULTS_JSON) -> List[Dict[str, Any]]:
     return list(json.loads(path.read_text(encoding="utf-8")).values())
 
 
-# ============================================================================
 # Plots
-# ============================================================================
-# Zero-shot CLIP needs no training data at all, so its accuracy is the one
-# baseline that is directly comparable against a few-shot run.  The Linear
-# Probe (93.61%) and CLIP-Adapter (97.28%) numbers already in the project were
-# measured on the *full* 21,600-image training set and are deliberately NOT
-# drawn here: putting them on a few-shot axis would compare two different
-# protocols on the same picture.
 ZERO_SHOT_TOP1 = 44.56
 
 
@@ -358,17 +270,6 @@ def plot_coop_results(
 ) -> None:
     """
     Draw every panel for which results exist.
-
-    Two figures are produced:
-
-    * ``coop_sweeps.png`` — one panel per ablation (learning rate, context
-      length, unified vs CSC, number of shots).  Panels with no data are left
-      out, so the function is safe to call after a single sweep.
-    * ``coop_training_curves.png`` — loss and validation accuracy per epoch,
-      the "training curves" the brief asks every run to log.
-
-    Points are annotated with their trainable-parameter count, because in this
-    project accuracy alone is only half of a result.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -383,11 +284,6 @@ def plot_coop_results(
     save_dir.mkdir(parents=True, exist_ok=True)
     max_shots = max(r["n_shots"] for r in results)
 
-    # Every panel varies exactly one axis, so all the *other* axes have to be
-    # pinned — otherwise the LR sweep (whose runs are all M=16, K=16) leaks
-    # into the context-length, CSC and shots panels and piles several points
-    # onto the same x position.  The reference value of an axis is the one
-    # shared by the largest number of runs.
     def _modal(field: str) -> Any:
         counts: Dict[Any, int] = {}
         for r in results:
@@ -397,9 +293,7 @@ def plot_coop_results(
     ref_lr = _modal("lr")
     ref_epochs = _modal("epochs")
 
-    # ------------------------------------------------------------------
     # Collect the panels that actually have data.
-    # ------------------------------------------------------------------
     panels = []
 
     lr_runs = sorted(
@@ -508,9 +402,8 @@ def plot_coop_results(
         plt.close(fig)
         print(f"[coop] Saved {out}")
 
-    # ------------------------------------------------------------------
-    # Training curves.
-    # ------------------------------------------------------------------
+
+    # Training 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
     for r in results:
         epochs = range(1, len(r["train_loss"]) + 1)
@@ -551,10 +444,7 @@ def print_summary(results: List[Dict[str, Any]]) -> None:
     print("=" * 78)
 
 
-# ============================================================================
 # CLI
-# ============================================================================
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="CoOp experiments on EuroSAT")
     parser.add_argument(
