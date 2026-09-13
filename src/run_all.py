@@ -1017,6 +1017,74 @@ def plot_per_dataset_diagnostics(
     engine.plot_per_class_metrics(
         usable, class_names=class_names, save_dir=str(save_dir),
     )
+    plot_confusion_compact(results, dataset_name, save_dir)
+
+
+# Methods and class abbreviations of the compact confusion figure in the
+# paper; the legend of the abbreviations is in the figure caption.
+COMPACT_CONFUSION_METHODS = [
+    ("ZeroShot", "Zero-Shot"),
+    ("CoOp", "CoOp"),
+    ("CLIP-Adapter", "CLIP-Adapter"),
+    ("LoRA", "LoRA"),
+    ("Tip-Adapter-F", "Tip-Adapter-F"),
+]
+COMPACT_CONFUSION_ABBR = {
+    "eurosat": ["AC", "F", "HV", "H", "I", "P", "PC", "R", "Ri", "SL"],
+}
+
+
+def plot_confusion_compact(
+    results: Dict[str, Dict[str, Dict[str, Any]]],
+    dataset_name: str,
+    save_dir: Path,
+    annotate_threshold: float = 0.10,
+) -> None:
+    
+    abbr = COMPACT_CONFUSION_ABBR.get(dataset_name)
+    ds_results = results.get(dataset_name, {})
+    panels = [
+        (title, ds_results[key]) for key, title in COMPACT_CONFUSION_METHODS
+        if ds_results.get(key, {}).get("all_predictions") is not None
+    ]
+    if abbr is None or not panels:
+        print(f"[Plot] {dataset_name}: compact confusion matrices skipped.")
+        return
+
+    num_classes = len(abbr)
+    fig, axes = plt.subplots(1, len(panels), figsize=(2.8 * len(panels), 3.1),
+                             constrained_layout=True, squeeze=False)
+    axes = axes[0]
+    for ax, (title, metrics) in zip(axes, panels):
+        preds = np.asarray(metrics["all_predictions"])
+        labels = np.asarray(metrics["all_labels"])
+
+        # Row-normalised: row i is the distribution of predictions for
+        # images whose true class is i.
+        cm = np.zeros((num_classes, num_classes))
+        np.add.at(cm, (labels, preds), 1)
+        cm /= cm.sum(axis=1, keepdims=True)
+
+        im = ax.imshow(cm, cmap="Blues", vmin=0, vmax=1)
+        for i in range(num_classes):
+            for j in range(num_classes):
+                if i != j and cm[i, j] >= annotate_threshold:
+                    # ".22" instead of "0.22" to fit inside the cell.
+                    ax.text(j, i, f"{cm[i, j]:.2f}"[1:], ha="center",
+                            va="center", fontsize=6.5, color="black")
+
+        accuracy = 100 * (preds == labels).mean()
+        ax.set_title(f"{title} ({accuracy:.1f}%)", fontsize=11)
+        ax.set_xticks(range(num_classes), abbr, fontsize=7.5)
+        ax.set_yticks(range(num_classes), abbr, fontsize=7.5)
+        ax.set_xlabel("Predicted", fontsize=8.5)
+    axes[0].set_ylabel("True", fontsize=8.5)
+    fig.colorbar(im, ax=axes, shrink=0.85, pad=0.01)
+
+    out = save_dir / f"confusion_matrices_compact_{dataset_name}.png"
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    print(f"[Plot] Saved: {out}")
 
 
 def plot_memory_from_results(
